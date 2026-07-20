@@ -31,29 +31,32 @@ const BASE = "https://chartinspect.com/api/v1";
 // los marcados "verificar" son la mejor estimación: revísalos en el Playground.
 // ------------------------------------------------------------
 const METRIC_MAP = {
-  // --- Realized Price por cohorte (verificar id/campos en el Playground) ---
-  rpSTH:   { metric: "sth-realized-price", fields: ["realized_price", "sth_realized_price", "value"] },
-  rpLTH:   { metric: "lth-realized-price", fields: ["realized_price", "lth_realized_price", "value"] },
-
-  // --- SOPR (ids confirmados) ---
+  // ====== CONFIRMADOS Y FUNCIONANDO (traen datos cada día) ======
+  // --- SOPR ---
   sthSopr: { metric: "sth-sopr", fields: ["sopr", "sth_sopr", "value"] },
   lthSopr: { metric: "lth-sopr", fields: ["sopr", "lth_sopr", "value"] },
   asopr:   { metric: "sopr",     fields: ["sopr", "asopr", "value"] },
-
-  // --- NUPL por cohorte (ids confirmados) ---
+  // --- NUPL por cohorte ---
   nuplSTH: { metric: "sth-nupl", fields: ["nupl", "sth_nupl", "value"] },
   nuplLTH: { metric: "lth-nupl", fields: ["nupl", "lth_nupl", "value"] },
+  // --- Valuación ---
+  mvrvZ:   { metric: "mvrv-z-score", fields: ["mvrv_z_score", "z_score", "zscore", "mvrvZScore", "value"] },
 
-  // --- Valuación (ids confirmados) ---
-  mvrvZ:   { metric: "mvrv-z-score", fields: ["mvrv_z_score", "z_score", "zscore", "value"] },
-  puell:   { metric: "daily-issuance", fields: ["puell_multiple", "puell", "value"] },
-
-  // --- Técnicos / momentum (verificar: pueden estar en market-indicators) ---
-  mayer:   { metric: "mayer-multiple", fields: ["mayer_multiple", "mayer", "value"] },
-  rsi1d:   { metric: "rsi", fields: ["rsi", "rsi_14", "value"] },
-  // Campos que Bambu tiene pero que quizá no expone ChartInspect directamente:
-  // rpSTH/rpLTH alternativos, ma2y, picycle, cdd, rsi1w, ema1d/1w, bb1d/1w, lthSopr...
-  // Si no hay id para alguno, el script lo omite y Bambu hace forward-fill.
+  // ====== PENDIENTES DE AJUSTE (ChartInspect los nombra distinto) ======
+  // Estos 5 dieron 404 o el campo no coincidió. Bambu mantiene su último valor
+  // (forward-fill) hasta que se corrija el id/campo con el Playground de ChartInspect
+  // (https://chartinspect.com/api-docs/playground) o el endpoint /onchain/status.
+  // Descomenta y corrige cada uno cuando tengas el id exacto:
+  //   rpSTH   -> precio realizado corto plazo   (probar en /onchain/status)
+  //   rpLTH   -> precio realizado largo plazo
+  //   puell   -> Puell (daily-issuance trae mining_revenue_usd/issuance_usd, no el múltiplo directo)
+  //   mayer   -> Mayer Multiple  (probablemente en /market-indicators/{indicator})
+  //   rsi1d   -> RSI diario      (probablemente en /market-indicators/{indicator})
+  // rpSTH: { metric: "???", fields: ["realized_price", "value"] },
+  // rpLTH: { metric: "???", fields: ["realized_price", "value"] },
+  // puell: { metric: "???", fields: ["puell_multiple", "value"] },
+  // mayer: { metric: "???", fields: ["mayer_multiple", "value"] },
+  // rsi1d: { metric: "???", fields: ["rsi", "value"] },
 };
 
 // El precio viene GRATIS dentro de cualquier respuesta on-chain (campo btc_price / eth_price).
