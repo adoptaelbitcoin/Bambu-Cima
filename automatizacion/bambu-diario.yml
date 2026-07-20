@@ -1,0 +1,41 @@
+# Copiar este archivo a:  .github/workflows/bambu-diario.yml
+# Corre todos los días y publica los datos frescos.
+name: Bambu · datos diarios
+
+on:
+  schedule:
+    - cron: "0 12 * * *"      # 12:00 UTC cada día (ajusta la hora si quieres)
+  workflow_dispatch: {}         # permite lanzarlo a mano desde la pestaña Actions
+
+permissions:
+  contents: write               # para poder hacer commit de los datos nuevos
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repo
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Traer datos del día
+        working-directory: automatizacion
+        env:
+          CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
+        run: node fetch-chartinspect.mjs
+
+      - name: Reconstruir archivos de datos
+        working-directory: automatizacion
+        run: node build-datos.mjs
+
+      - name: Guardar cambios (dispara el redeploy de Netlify)
+        run: |
+          git config user.name  "bambu-bot"
+          git config user.email "bot@bambu.local"
+          git add app/btc_real.js app/eth_real.js app/history.js
+          git commit -m "datos: actualización automática $(date -u +%F)" || echo "sin cambios"
+          git push

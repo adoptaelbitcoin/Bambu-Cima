@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bambu Cima · Decisión de capital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="app/styles.css" />
+<link rel="stylesheet" href="pro/stylePro.css" />
+</head>
+<body>
+
+<!-- Formulario oculto para que Netlify lo detecte al hacer build (requerido por Netlify Forms) -->
+<form name="bambu-cima-acceso" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="nombre" /><input type="email" name="correo" /><input type="text" name="bot-field" />
+</form>
+
+<div id="gate" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#182420;padding:24px;font-family:'IBM Plex Sans',sans-serif;">
+  <div style="width:100%;max-width:380px;background:#20302A;border-radius:16px;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+    <div style="font-family:'IBM Plex Mono',monospace;color:#EAD98A;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Acceso piloto</div>
+    <h1 style="color:#EDE7D2;font-size:22px;margin:0 0 22px;">Bambu Cima</h1>
+
+    <form id="gate-form">
+      <label style="display:block;color:#B8C4BD;font-size:13px;margin-bottom:6px;">Nombre</label>
+      <input id="gate-nombre" required style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid #3A4B43;background:#1A2621;color:#EDE7D2;font-size:15px;margin-bottom:14px;" />
+      <label style="display:block;color:#B8C4BD;font-size:13px;margin-bottom:6px;">Correo</label>
+      <input id="gate-correo" type="email" required style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid #3A4B43;background:#1A2621;color:#EDE7D2;font-size:15px;margin-bottom:20px;" />
+      <button type="submit" style="width:100%;padding:13px;border:none;border-radius:8px;background:#EAD98A;color:#1A2621;font-weight:600;font-size:15px;cursor:pointer;">Entrar</button>
+      <div id="gate-error" style="display:none;color:#E39A9A;font-size:12.5px;margin-top:10px;">No se pudo registrar tu acceso. Intenta de nuevo.</div>
+    </form>
+  </div>
+</div>
+
+<div id="root" style="display:none;"></div>
+
+<script>
+(function () {
+  var KEY = "bambu_cima_access";
+  function showApp() {
+    document.getElementById("gate").style.display = "none";
+    document.getElementById("root").style.display = "block";
+  }
+  function registerLead(nombre, correo) {
+    var body = new URLSearchParams({ "form-name": "bambu-cima-acceso", nombre: nombre, correo: correo }).toString();
+    return fetch("/", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
+  }
+  var saved = localStorage.getItem(KEY);
+  if (saved) { showApp(); return; }
+
+  document.getElementById("gate-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var nombre = document.getElementById("gate-nombre").value.trim();
+    var correo = document.getElementById("gate-correo").value.trim();
+    registerLead(nombre, correo)
+      .then(function () {
+        localStorage.setItem(KEY, JSON.stringify({ nombre: nombre, correo: correo, via: "correo", fecha: new Date().toISOString() }));
+        showApp();
+      })
+      .catch(function () { document.getElementById("gate-error").style.display = "block"; });
+  });
+
+})();
+</script>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="32" height="32" rx="7" fill="#22402F"/>
+    <path d="M13 8v16M19 8v16" stroke="#EDE7D2" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M13 13h6M13 18h6" stroke="#EAD98A" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Datos y motor (JS plano) -->
+<script src="app/data.js"></script>
+<script src="app/engine.js"></script>
+<script src="app/glossary.js"></script>
+<script src="app/btc_real.js"></script>
+<script src="app/eth_real.js"></script>
+<script src="app/history.js"></script>
+<script src="app/cycle.js"></script>
+<script src="app/extras.js"></script>
+<script src="app/live.js"></script>
+
+<!-- Componentes y secciones reales de Bambu + (JSX) -->
+<script type="text/babel" src="app/tweaks-panel.jsx"></script>
+<script type="text/babel" src="app/components.jsx"></script>
+<script type="text/babel" src="app/charts2.jsx"></script>
+<script type="text/babel" src="app/sectionsCore.jsx"></script>
+<script type="text/babel" src="app/sectionsMore.jsx"></script>
+<script type="text/babel" src="app/sectionsHist.jsx"></script>
+<script type="text/babel" src="app/sectionsCycle.jsx"></script>
+<script type="text/babel" src="app/sectionsBlog.jsx"></script>
+<script type="text/babel" src="app/sectionsMarket.jsx"></script>
+<script type="text/babel" src="app/sectionsOnchainHeat.jsx"></script>
+<script type="text/babel" src="app/sectionsCartera.jsx"></script>
+<script type="text/babel" src="app/sectionsDecision.jsx"></script>
+<script type="text/babel" src="app/sectionsReport.jsx"></script>
+<script type="text/babel" src="app/sectionsGuia.jsx"></script>
+
+<!-- Componentes reutilizados de Bambu S -->
+<script type="text/babel" src="sbambu/chartsS.jsx"></script>
+<script type="text/babel" src="sbambu/dcaS.jsx"></script>
+
+<!-- Shell de Bambu Cima -->
+<script type="text/babel" src="pro/appPro.jsx"></script>
+</body>
+</html>
