@@ -14,6 +14,7 @@ function dataDate() {
   const iso = window.BambuDataDate || (R ? R.latestIso : "2026-06-28");
   return new Date(iso + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
+function dataTime() { return window.BambuDataTime || "12:00 UTC"; }
 
 /* veredicto llano por temperatura */
 function verdictWord(temp) {
@@ -186,7 +187,7 @@ function App() {
     ]},
   ];
   const TITLES = {
-    resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
+    resumen: ["Resumen ejecutivo", "La lectura consolidada del modelo · tu punto de partida"],
     plan: ["DCA inteligente", "Tus aportes y tu capital estructurados con la regla probada del backtest"],
     salida: ["Plan de salida", "Decide hoy, con la cabeza fría, cómo tomarás ganancias"],
     heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
@@ -470,12 +471,13 @@ function App() {
             </React.Fragment>
           ))}
         </nav>
-        <div className="snav-foot">Datos reales al {date}<br />Modelo v2.2 · Pedro Iván Avellaneda<br /><span style={{ color: "#566359" }}>No es asesoramiento financiero.</span></div>
+        <div className="snav-foot">Reporte del {date} · {dataTime()}<br />Modelo v2.2 · Pedro Iván Avellaneda<br /><span style={{ color: "#566359" }}>No es asesoramiento financiero.</span></div>
       </aside>
       <div className="smain">
         <header className="stopbar">
           <button className="snav-toggle" onClick={() => setNavOpen(o => !o)} aria-label="Menú"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg></button>
           <div className="stb-title">{(TITLES[page] || ["Bambu Cima"])[0]}<small>{(TITLES[page] || ["", ""])[1]}</small></div>
+          <div className="stb-chip"><span className="k">Reporte</span><span className="v num">{date} · {dataTime()}</span></div>
           <span style={{ flex: 1 }} />
           <div className="stb-chip stb-hide"><span className="k">Régimen</span><span className="v" style={{ color: "var(--brand)" }}>{regime}</span></div>
           <div className="stb-chip stb-hide"><span className="k">BTC</span><span className="v num">{usd(btc.vals.price)}</span></div>

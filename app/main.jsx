@@ -33,7 +33,7 @@ const NAVGROUPS = [
   ]},
 ];
 const TITLES = {
-  resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
+  resumen: ["Resumen ejecutivo", "Lectura consolidada del modelo v2.2"],
   heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
   historico:["Histórico de datos", "Series diarias y comparativos BTC / ETH"],
   ciclo:   ["Ciclo Halving +", "Ciclos, fases alcistas/bajistas y proyección"],
