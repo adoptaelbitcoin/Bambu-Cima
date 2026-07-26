@@ -142,19 +142,54 @@
   const corrMatrix = corrMatrices[90];
 
   // calendario macro (offset desde hoy)
+  /* Calendario macro con las reglas reales de publicación, ancladas a la fecha
+     de datos (no a offsets arbitrarios): NFP = 1er viernes; CPI ≈ día 13 hábil;
+     FOMC = reunión programada (~8/año); opciones = último viernes; PIB = fin de mes;
+     Acta de la Fed = 3 semanas después del FOMC. */
   function calendar() {
-    const C = window.BambuCycle; const now = new Date();
-    const mk = (days, event, impact, type) => { const d = new Date(now); d.setDate(d.getDate() + days); return { date: d, event, impact, type, days }; };
-    const list = [
-      mk(2, "Datos de empleo (NFP)", "alto", "macro"),
-      mk(6, "Dato de inflación CPI", "alto", "macro"),
-      mk(9, "Decisión de tipos FOMC", "alto", "macro"),
-      mk(13, "Vencimiento mensual de opciones BTC", "medio", "cripto"),
-      mk(21, "PIB trimestral", "medio", "macro"),
-      mk(34, "Acta de la Fed", "medio", "macro"),
+    const C = window.BambuCycle;
+    const iso = window.BambuDataDate || (window.BambuRealData && window.BambuRealData.BTC ? window.BambuRealData.BTC.latestIso : null);
+    const today = iso ? new Date(iso + "T00:00:00Z") : new Date();
+    const U = (y, m, d) => new Date(Date.UTC(y, m, d));
+    const shiftToWeekday = (d) => { const w = d.getUTCDay(); if (w === 0) d.setUTCDate(d.getUTCDate() + 1); if (w === 6) d.setUTCDate(d.getUTCDate() + 2); return d; };
+    const nthWeekday = (y, m, weekday, n) => { const d = U(y, m, 1); let c = 0; while (true) { if (d.getUTCDay() === weekday) { c++; if (c === n) return new Date(d); } d.setUTCDate(d.getUTCDate() + 1); } };
+    const lastWeekday = (y, m, weekday) => { const d = U(y, m + 1, 0); while (d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() - 1); return d; };
+
+    // Reuniones FOMC programadas (miércoles; ~8 al año, cadencia real de la Fed)
+    const fomcMeetings = [
+      U(2026, 0, 28), U(2026, 2, 18), U(2026, 3, 29), U(2026, 5, 17),
+      U(2026, 6, 29), U(2026, 8, 16), U(2026, 10, 4), U(2026, 11, 16),
+      U(2027, 0, 27), U(2027, 2, 17),
     ];
-    if (C) { const nh = C.computeNow(); list.push({ date: C.halvings.find(h => h.n === 5).date, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days: nh.daysUntil }); }
-    return list.sort((a, b) => a.days - b.days);
+
+    const out = [];
+    const push = (date, event, impact, type) => {
+      const days = Math.round((date - today) / 86400000);
+      if (days >= 0 && days <= 120) out.push({ date, event, impact, type, days });
+    };
+
+    // Recorre este mes y los dos siguientes aplicando cada regla
+    for (let k = 0; k <= 3; k++) {
+      const base = U(today.getUTCFullYear(), today.getUTCMonth() + k, 1);
+      const y = base.getUTCFullYear(), m = base.getUTCMonth();
+      push(nthWeekday(y, m, 5, 1), "Datos de empleo (NFP)", "alto", "macro");          // 1er viernes
+      push(shiftToWeekday(U(y, m, 13)), "Dato de inflación CPI", "alto", "macro");      // ~día 13 hábil
+      push(lastWeekday(y, m, 5), "Vencimiento mensual de opciones BTC", "medio", "cripto"); // último viernes
+      if (m % 3 === 0) push(shiftToWeekday(U(y, m, 28)), "PIB trimestral (avance)", "medio", "macro");
+    }
+    // FOMC programados + acta 3 semanas después
+    fomcMeetings.forEach(d => {
+      push(new Date(d), "Decisión de tipos FOMC", "alto", "macro");
+      const acta = new Date(d); acta.setUTCDate(acta.getUTCDate() + 21);
+      push(acta, "Acta de la Fed (FOMC)", "medio", "macro");
+    });
+    // Halving estimado
+    if (C) { const h5 = C.halvings.find(h => h.n === 5); if (h5) { const days = Math.round((h5.date - today) / 86400000); out.push({ date: h5.date, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days }); } }
+
+    // deduplica misma fecha+evento y ordena
+    const seen = new Set();
+    return out.filter(e => { const k = e.days + "|" + e.event; if (seen.has(k)) return false; seen.add(k); return true; })
+              .sort((a, b) => a.days - b.days);
   }
 
   /* sentimiento agregado dinámico: derivado de la temperatura actual del composite BTC
