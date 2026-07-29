@@ -12,11 +12,6 @@
 </head>
 <body>
 
-<!-- Formulario oculto para que Netlify lo detecte al hacer build (requerido por Netlify Forms) -->
-<form name="bambu-cima-acceso" data-netlify="true" netlify-honeypot="bot-field" hidden>
-  <input type="text" name="nombre" /><input type="email" name="correo" /><input type="text" name="bot-field" />
-</form>
-
 <div id="gate" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#182420;padding:24px;font-family:'IBM Plex Sans',sans-serif;">
   <div style="width:100%;max-width:380px;background:#20302A;border-radius:16px;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
     <div style="font-family:'IBM Plex Mono',monospace;color:#EAD98A;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Acceso piloto</div>
@@ -42,9 +37,24 @@
     document.getElementById("gate").style.display = "none";
     document.getElementById("root").style.display = "block";
   }
+  /* ---------------------------------------------------------------
+     GOOGLE FORMS · pega aquí los 3 datos de TU formulario.
+     Cómo obtenerlos: ver automatizacion/registro-google-forms.md
+     --------------------------------------------------------------- */
+  var GFORM = {
+    formId: "1FAIpQLScigKX2chZGNPwsfhtdtmwZqpVq3hM_z8FG9WWfVTWP0Fh6Pw",
+    nombre: "entry.1258144612",
+    correo: "entry.900875673"
+  };
+
   function registerLead(nombre, correo) {
-    var body = new URLSearchParams({ "form-name": "bambu-cima-acceso", nombre: nombre, correo: correo }).toString();
-    return fetch("/", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
+    if (!GFORM.formId) return Promise.resolve();
+    var body = new URLSearchParams();
+    body.append(GFORM.nombre, nombre);
+    body.append(GFORM.correo, correo);
+    var url = "https://docs.google.com/forms/d/e/" + GFORM.formId + "/formResponse";
+    // mode no-cors: Google recibe el dato aunque el navegador no pueda leer la respuesta
+    return fetch(url, { method: "POST", mode: "no-cors", body: body });
   }
   var saved = localStorage.getItem(KEY);
   if (saved) { showApp(); return; }
@@ -53,12 +63,11 @@
     e.preventDefault();
     var nombre = document.getElementById("gate-nombre").value.trim();
     var correo = document.getElementById("gate-correo").value.trim();
-    registerLead(nombre, correo)
-      .then(function () {
-        localStorage.setItem(KEY, JSON.stringify({ nombre: nombre, correo: correo, via: "correo", fecha: new Date().toISOString() }));
-        showApp();
-      })
-      .catch(function () { document.getElementById("gate-error").style.display = "block"; });
+    var done = function () {
+      localStorage.setItem(KEY, JSON.stringify({ nombre: nombre, correo: correo, via: "correo", fecha: new Date().toISOString() }));
+      showApp();
+    };
+    registerLead(nombre, correo).then(done).catch(done);
   });
 
 })();
