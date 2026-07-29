@@ -175,7 +175,10 @@
       push(nthWeekday(y, m, 5, 1), "Datos de empleo (NFP)", "alto", "macro");          // 1er viernes
       push(shiftToWeekday(U(y, m, 13)), "Dato de inflación CPI", "alto", "macro");      // ~día 13 hábil
       push(lastWeekday(y, m, 5), "Vencimiento mensual de opciones BTC", "medio", "cripto"); // último viernes
+      push(shiftToWeekday(U(y, m, 1)), "ISM manufacturero", "medio", "macro");           // primer hábil
+      push(shiftToWeekday(U(y, m, 27)), "Inflación PCE (la que mira la Fed)", "medio", "macro");
       if (m % 3 === 0) push(shiftToWeekday(U(y, m, 28)), "PIB trimestral (avance)", "medio", "macro");
+      if (m === 2 || m === 5 || m === 8 || m === 11) push(lastWeekday(y, m, 5), "Vencimiento trimestral de opciones BTC y ETH", "alto", "cripto");
     }
     // FOMC programados + acta 3 semanas después
     fomcMeetings.forEach(d => {
@@ -183,8 +186,14 @@
       const acta = new Date(d); acta.setUTCDate(acta.getUTCDate() + 21);
       push(acta, "Acta de la Fed (FOMC)", "medio", "macro");
     });
-    // Halving estimado
-    if (C) { const h5 = C.halvings.find(h => h.n === 5); if (h5) { const days = Math.round((h5.date - today) / 86400000); out.push({ date: h5.date, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days }); } }
+    // Halving estimado y hitos de ciclo
+    if (C) { const h5 = C.halvings.find(h => h.n === 5); if (h5) { const hd = h5.date instanceof Date ? h5.date : new Date(h5.date + "T00:00:00Z"); const days = Math.round((hd - today) / 86400000); out.push({ date: hd, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days }); } }
+    // Eventos puntuales del calendario cripto/regulatorio
+    [
+      [U(2026, 7, 21), "Revisión anual de flujos en ETF de BTC", "medio", "cripto"],
+      [U(2026, 8, 30), "Cierre de trimestre: rebalanceo institucional", "medio", "cripto"],
+      [U(2026, 11, 31), "Cierre de año fiscal: ventas por impuestos", "medio", "cripto"],
+    ].forEach(([d, e, i, t]) => push(d, e, i, t));
 
     // deduplica misma fecha+evento y ordena
     const seen = new Set();
