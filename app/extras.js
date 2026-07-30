@@ -229,9 +229,56 @@
     };
   })();
 
+  /* Eventos macro y cripto ya ocurridos, con el efecto real medido en el precio
+     de BTC (ventana de 3 días desde el evento). Ayudó / perjudicó se calcula con
+     los datos reales, no se escribe a mano. */
+  function recentEvents() {
+    const R = window.BambuRealData && window.BambuRealData.BTC;
+    const iso = window.BambuDataDate || (R ? R.latestIso : null);
+    const today = iso ? new Date(iso + "T00:00:00Z") : new Date();
+    const U = (y, m, d) => new Date(Date.UTC(y, m, d));
+
+    // Eventos con fecha conocida (los mismos que el calendario, ya pasados)
+    const past = [
+      [U(2026, 6, 29), "Decisión de tipos FOMC", "alto", "macro"],
+      [U(2026, 6, 24), "Vencimiento mensual de opciones BTC", "medio", "cripto"],
+      [U(2026, 6, 13), "Dato de inflación CPI", "alto", "macro"],
+      [U(2026, 6, 3),  "Datos de empleo (NFP)", "alto", "macro"],
+      [U(2026, 6, 1),  "ISM manufacturero", "medio", "macro"],
+      [U(2026, 5, 26), "Vencimiento trimestral de opciones BTC y ETH", "alto", "cripto"],
+      [U(2026, 5, 17), "Decisión de tipos FOMC", "alto", "macro"],
+      [U(2026, 5, 12), "Dato de inflación CPI", "alto", "macro"],
+    ];
+
+    const priceAt = (d) => {
+      if (!R) return null;
+      let k = R.indexOfIso(d.toISOString().slice(0, 10));
+      if (k < 0) { // busca el día hábil más cercano hacia atrás
+        for (let j = 1; j <= 5 && k < 0; j++) {
+          const alt = new Date(d); alt.setUTCDate(alt.getUTCDate() - j);
+          k = R.indexOfIso(alt.toISOString().slice(0, 10));
+        }
+      }
+      return k >= 0 ? { i: k, p: R.cols.price[k] } : null;
+    };
+
+    return past.map(([date, event, impact, type]) => {
+      const days = Math.round((today - date) / 86400000);
+      const a = priceAt(date);
+      let chg = null, after = null;
+      if (a) {
+        const j = Math.min(a.i + 3, R.count - 1);
+        after = R.cols.price[j];
+        chg = ((after - a.p) / a.p) * 100;
+      }
+      const effect = chg == null ? "sin dato" : (chg > 1.5 ? "ayudó" : chg < -1.5 ? "perjudicó" : "neutral");
+      return { date, event, impact, type, days, chg, before: a ? a.p : null, after, effect };
+    }).filter(e => e.days > 0).sort((a, b) => a.days - b.days);
+  }
+
   window.BambuExtras = {
     SUPPLY, candles, changes, dominanceSeries, fearGreed, fgLabel, liquidations,
-    cohortsByAge, cohortsByWallet, flowSeries, stablecoins, whales,
+    cohortsByAge, cohortsByWallet, flowSeries, stablecoins, whales, recentEvents,
     corrAssets, corrMatrix, corrMatrices, calendar, sentiment,
     marketcap(type, price) { return SUPPLY[type] ? SUPPLY[type] * price : null; },
   };

@@ -411,6 +411,31 @@ function SectionMacro({ results, palette }) {
           </div>
         </Card>
       </div>
+
+      {/* eventos ya ocurridos y su efecto real medido */}
+      <div style={{ marginTop: 16 }}>
+        <Card title={<>Qué pasó con los últimos eventos <HelpDot term="Eventos recientes y su efecto" def="Cada evento macro o cripto ya ocurrido, con el movimiento real del precio de BTC en los 3 días siguientes. Sirve para ver qué tipo de noticia mueve de verdad al mercado en este régimen: si los CPI vienen ayudando y los vencimientos de opciones perjudicando, el próximo de esa clase merece más atención. Ayudó = subió más de 1,5% · Perjudicó = cayó más de 1,5% · Neutral = se movió menos." /></>} sub="Efecto real en BTC a 3 días del evento" pad={false}>
+          <table className="tbl">
+            <thead><tr><th>Hace</th><th>Fecha</th><th>Evento</th><th className="c">BTC 3d</th><th className="c">Efecto</th><th className="c">Tipo</th></tr></thead>
+            <tbody>
+              {X.recentEvents().map((e, i) => {
+                const col = e.effect === "ayudó" ? "#2F7D5B" : e.effect === "perjudicó" ? "#C0492E" : "#9AA0A8";
+                return (
+                  <tr key={i}>
+                    <td className="num tiny muted" style={{ whiteSpace: "nowrap" }}>{e.days}d</td>
+                    <td className="tiny" style={{ whiteSpace: "nowrap" }}>{window.BambuCycle.fmtES(e.date)}</td>
+                    <td style={{ fontWeight: 500 }}>{e.event}</td>
+                    <td className="c num" style={{ fontWeight: 600, color: col }}>{e.chg == null ? "—" : (e.chg > 0 ? "+" : "") + e.chg.toFixed(1) + "%"}</td>
+                    <td className="c"><span className="badge" style={{ background: mixSoft(col), color: col, fontWeight: 600 }}>{e.effect}</span></td>
+                    <td className="c tiny muted">{e.type}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="tiny muted" style={{ padding: "10px 14px", lineHeight: 1.5 }}>Cómo leerlo: si una clase de evento viene <b>perjudicando</b> de forma repetida, conviene no aumentar posición justo antes del siguiente de ese tipo; si viene <b>ayudando</b>, el mercado está absorbiendo bien esa noticia. Nada de esto garantiza el próximo resultado.</div>
+        </Card>
+      </div>
     </div>
   );
 }
