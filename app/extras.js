@@ -240,8 +240,9 @@
 
     // Eventos con fecha conocida (los mismos que el calendario, ya pasados)
     const past = [
+      [U(2026, 6, 31), "Inflación PCE (la que mira la Fed)", "medio", "macro"],
+      [U(2026, 6, 31), "Vencimiento mensual de opciones BTC", "medio", "cripto"],
       [U(2026, 6, 29), "Decisión de tipos FOMC", "alto", "macro"],
-      [U(2026, 6, 24), "Vencimiento mensual de opciones BTC", "medio", "cripto"],
       [U(2026, 6, 13), "Dato de inflación CPI", "alto", "macro"],
       [U(2026, 6, 3),  "Datos de empleo (NFP)", "alto", "macro"],
       [U(2026, 6, 1),  "ISM manufacturero", "medio", "macro"],
