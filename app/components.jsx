@@ -16,6 +16,7 @@ const ICONS = {
   ingreso:  ["M4 6h16", "M4 12h9", "M4 18h6", "M15 17l2 2 4-4"],
   heatmap:  ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"],
   backtest: ["M3 3v18h18", "M7 14l3-4 3 3 4-7"],
+  historial:["M4 5h16", "M4 10h16", "M4 15h10", "M4 20h6"],
   stats:    ["M5 20V9", "M12 20V4", "M19 20v-7"],
   sizing:   ["M12 3a9 9 0 109 9", "M12 12l5-3", "M12 12V5"],
   historico:["M3.5 9a9 9 0 1 1-.5 5", "M3 5v4h4", "M12 8v4.5l3 1.8"],
