@@ -14,7 +14,20 @@ function dataDate() {
   const iso = window.BambuDataDate || (R ? R.latestIso : "2026-06-28");
   return new Date(iso + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
-function dataTime() { return window.BambuDataTime || "12:00 UTC"; }
+function dataTime() { return window.BambuDataTime || "13:00 UTC"; }
+
+/* Aviso permanente: cadencia de actualización */
+function UpdateNotice() {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "var(--surface-2, #F2F6F2)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--brand)" strokeWidth="2" strokeLinecap="round" style={{ flex: "none", marginTop: 1 }}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+      <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
+        <b style={{ color: "var(--ink)" }}>Bambu Cima se actualiza una vez al día, después de las 13:00 UTC.</b>{" "}
+        Las métricas on-chain y el precio corresponden al último día cerrado. No es una herramienta de seguimiento minuto a minuto: la lectura del día basta para decidir.
+      </div>
+    </div>
+  );
+}
 
 /* veredicto llano por temperatura */
 function verdictWord(temp) {
@@ -128,7 +141,7 @@ const PICONS = {
   dca: "M12 3v4M12 17v4M5 12h14M8 8l-3 4 3 4M16 8l3 4-3 4",
   heatmap: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z", macro: "M12 3v18M5 8l7-5 7 5M5 12h14",
   ciclo: "M21 12a9 9 0 1 1-3-6.7M21 4v4h-4", onchain: "M4 19V5m0 14h16M8 15l3-4 3 2 4-6",
-  backtest: "M4 4v16h16M8 14l3-4 3 3 4-6", reporte: "M7 3h10l3 3v15H7zM14 3v4h4M10 13h6M10 17h6",
+  backtest: "M4 4v16h16M8 14l3-4 3 3 4-6", historial: "M4 5h16M4 10h16M4 15h10M4 20h6", reporte: "M7 3h10l3 3v15H7zM14 3v4h4M10 13h6M10 17h6",
   salida: "M14 4h5v16h-5M10 8l4 4-4 4M14 12H3",
   guia: "M12 7a3 3 0 1 1 2 5c-1 .6-2 1-2 2M12 18h.01",
 };
@@ -176,6 +189,7 @@ function App() {
     ]},
     { label: "Valida y decide", items: [
       { id: "backtest", label: "Backtest & Stats" },
+      { id: "historial", label: "Historial de lecturas" },
       { id: "reporte", label: "Reporte 360" },
     ]},
     { label: "Tu estructura", items: [
@@ -187,7 +201,7 @@ function App() {
     ]},
   ];
   const TITLES = {
-    resumen: ["Resumen ejecutivo", "La lectura consolidada del modelo · tu punto de partida"],
+    resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
     plan: ["DCA inteligente", "Tus aportes y tu capital estructurados con la regla probada del backtest"],
     salida: ["Plan de salida", "Decide hoy, con la cabeza fría, cómo tomarás ganancias"],
     heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
@@ -195,6 +209,7 @@ function App() {
     ciclo: ["Ciclo Halving+", "Dónde estás en el ciclo y qué esperar"],
     onchain: ["On-chain+", "Cohortes, flujos y ballenas en detalle"],
     backtest: ["Backtest & Stats", "Qué tan fiable ha sido el modelo"],
+    historial: ["Historial de lecturas", "Qué habría dicho Bambu cada día desde 2017"],
     reporte: ["Reporte 360", "Tu informe completo, semanal y on-chain"],
     guia: ["Cómo usar Bambu", "Guía paso a paso"],
   };
@@ -417,6 +432,7 @@ function App() {
       case "ciclo": return <SectionCiclo palette={PAL} />;
       case "onchain": return <SectionOnchain results={results} palette={PAL} k={27} />;
       case "macro": return <SectionMacro results={results} palette={PAL} />;
+      case "historial": return <SectionHistorial palette={PAL} />;
       case "backtest": return (
         <div>
           <SectionBacktest palette={PAL} k={27} assets={assets} />
@@ -484,7 +500,7 @@ function App() {
           {eth && <div className="stb-chip stb-hide"><span className="k">ETH</span><span className="v num">{usd(eth.vals.price)}</span></div>}
         </header>
         <div className="scontent">
-          <div className="spage" key={page}>{renderPage()}</div>
+          <div className="spage" key={page}><UpdateNotice />{renderPage()}</div>
         </div>
       </div>
     </div>
