@@ -146,59 +146,55 @@
      de datos (no a offsets arbitrarios): NFP = 1er viernes; CPI ≈ día 13 hábil;
      FOMC = reunión programada (~8/año); opciones = último viernes; PIB = fin de mes;
      Acta de la Fed = 3 semanas después del FOMC. */
-  function calendar() {
-    const C = window.BambuCycle;
+  /* --- Reglas únicas del calendario (las usan calendar() y recentEvents()) --- */
+  const CAL_U = (y, m, d) => new Date(Date.UTC(y, m, d));
+  const CAL_shift = (d) => { const w = d.getUTCDay(); if (w === 0) d.setUTCDate(d.getUTCDate() + 1); if (w === 6) d.setUTCDate(d.getUTCDate() + 2); return d; };
+  const CAL_nth = (y, m, weekday, n) => { const d = CAL_U(y, m, 1); let c = 0; while (true) { if (d.getUTCDay() === weekday) { c++; if (c === n) return new Date(d); } d.setUTCDate(d.getUTCDate() + 1); } };
+  const CAL_last = (y, m, weekday) => { const d = CAL_U(y, m + 1, 0); while (d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() - 1); return d; };
+  const CAL_FOMC = [
+    CAL_U(2026, 0, 28), CAL_U(2026, 2, 18), CAL_U(2026, 3, 29), CAL_U(2026, 5, 17),
+    CAL_U(2026, 6, 29), CAL_U(2026, 8, 16), CAL_U(2026, 10, 4), CAL_U(2026, 11, 16),
+    CAL_U(2027, 0, 27), CAL_U(2027, 2, 17),
+  ];
+  const CAL_ONE_OFF = [
+    [CAL_U(2026, 7, 21), "Revisión anual de flujos en ETF de BTC", "medio", "cripto"],
+    [CAL_U(2026, 8, 30), "Cierre de trimestre: rebalanceo institucional", "medio", "cripto"],
+    [CAL_U(2026, 11, 31), "Cierre de año fiscal: ventas por impuestos", "medio", "cripto"],
+  ];
+  function calToday() {
     const iso = window.BambuDataDate || (window.BambuRealData && window.BambuRealData.BTC ? window.BambuRealData.BTC.latestIso : null);
-    const today = iso ? new Date(iso + "T00:00:00Z") : new Date();
-    const U = (y, m, d) => new Date(Date.UTC(y, m, d));
-    const shiftToWeekday = (d) => { const w = d.getUTCDay(); if (w === 0) d.setUTCDate(d.getUTCDate() + 1); if (w === 6) d.setUTCDate(d.getUTCDate() + 2); return d; };
-    const nthWeekday = (y, m, weekday, n) => { const d = U(y, m, 1); let c = 0; while (true) { if (d.getUTCDay() === weekday) { c++; if (c === n) return new Date(d); } d.setUTCDate(d.getUTCDate() + 1); } };
-    const lastWeekday = (y, m, weekday) => { const d = U(y, m + 1, 0); while (d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() - 1); return d; };
-
-    // Reuniones FOMC programadas (miércoles; ~8 al año, cadencia real de la Fed)
-    const fomcMeetings = [
-      U(2026, 0, 28), U(2026, 2, 18), U(2026, 3, 29), U(2026, 5, 17),
-      U(2026, 6, 29), U(2026, 8, 16), U(2026, 10, 4), U(2026, 11, 16),
-      U(2027, 0, 27), U(2027, 2, 17),
-    ];
-
-    const out = [];
-    const push = (date, event, impact, type) => {
-      const days = Math.round((date - today) / 86400000);
-      if (days >= 0 && days <= 120) out.push({ date, event, impact, type, days });
-    };
-
-    // Recorre este mes y los dos siguientes aplicando cada regla
-    for (let k = 0; k <= 3; k++) {
-      const base = U(today.getUTCFullYear(), today.getUTCMonth() + k, 1);
+    return iso ? new Date(iso + "T00:00:00Z") : new Date();
+  }
+  /* Genera TODOS los eventos con reglas, de monthsBack meses atrás a monthsFwd adelante */
+  function calEvents(monthsBack, monthsFwd) {
+    const today = calToday(), out = [];
+    const add = (date, event, impact, type) => out.push({ date, event, impact, type, days: Math.round((date - today) / 86400000) });
+    for (let k = -monthsBack; k <= monthsFwd; k++) {
+      const base = CAL_U(today.getUTCFullYear(), today.getUTCMonth() + k, 1);
       const y = base.getUTCFullYear(), m = base.getUTCMonth();
-      push(nthWeekday(y, m, 5, 1), "Datos de empleo (NFP)", "alto", "macro");          // 1er viernes
-      push(shiftToWeekday(U(y, m, 13)), "Dato de inflación CPI", "alto", "macro");      // ~día 13 hábil
-      push(lastWeekday(y, m, 5), "Vencimiento mensual de opciones BTC", "medio", "cripto"); // último viernes
-      push(shiftToWeekday(U(y, m, 1)), "ISM manufacturero", "medio", "macro");           // primer hábil
-      push(shiftToWeekday(U(y, m, 27)), "Inflación PCE (la que mira la Fed)", "medio", "macro");
-      if (m % 3 === 0) push(shiftToWeekday(U(y, m, 28)), "PIB trimestral (avance)", "medio", "macro");
-      if (m === 2 || m === 5 || m === 8 || m === 11) push(lastWeekday(y, m, 5), "Vencimiento trimestral de opciones BTC y ETH", "alto", "cripto");
+      add(CAL_nth(y, m, 5, 1), "Datos de empleo (NFP)", "alto", "macro");
+      add(CAL_shift(CAL_U(y, m, 13)), "Dato de inflación CPI", "alto", "macro");
+      add(CAL_last(y, m, 5), "Vencimiento mensual de opciones BTC", "medio", "cripto");
+      add(CAL_shift(CAL_U(y, m, 1)), "ISM manufacturero", "medio", "macro");
+      add(CAL_shift(CAL_U(y, m, 27)), "Inflación PCE (la que mira la Fed)", "medio", "macro");
+      if (m % 3 === 0) add(CAL_shift(CAL_U(y, m, 28)), "PIB trimestral (avance)", "medio", "macro");
+      if (m === 2 || m === 5 || m === 8 || m === 11) add(CAL_last(y, m, 5), "Vencimiento trimestral de opciones BTC y ETH", "alto", "cripto");
     }
-    // FOMC programados + acta 3 semanas después
-    fomcMeetings.forEach(d => {
-      push(new Date(d), "Decisión de tipos FOMC", "alto", "macro");
+    CAL_FOMC.forEach(d => {
+      add(new Date(d), "Decisión de tipos FOMC", "alto", "macro");
       const acta = new Date(d); acta.setUTCDate(acta.getUTCDate() + 21);
-      push(acta, "Acta de la Fed (FOMC)", "medio", "macro");
+      add(acta, "Acta de la Fed (FOMC)", "medio", "macro");
     });
-    // Halving estimado y hitos de ciclo
-    if (C) { const h5 = C.halvings.find(h => h.n === 5); if (h5) { const hd = h5.date instanceof Date ? h5.date : new Date(h5.date + "T00:00:00Z"); const days = Math.round((hd - today) / 86400000); out.push({ date: hd, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days }); } }
-    // Eventos puntuales del calendario cripto/regulatorio
-    [
-      [U(2026, 7, 21), "Revisión anual de flujos en ETF de BTC", "medio", "cripto"],
-      [U(2026, 8, 30), "Cierre de trimestre: rebalanceo institucional", "medio", "cripto"],
-      [U(2026, 11, 31), "Cierre de año fiscal: ventas por impuestos", "medio", "cripto"],
-    ].forEach(([d, e, i, t]) => push(d, e, i, t));
-
-    // deduplica misma fecha+evento y ordena
+    CAL_ONE_OFF.forEach(([d, e, i, t]) => add(new Date(d), e, i, t));
     const seen = new Set();
-    return out.filter(e => { const k = e.days + "|" + e.event; if (seen.has(k)) return false; seen.add(k); return true; })
-              .sort((a, b) => a.days - b.days);
+    return out.filter(e => { const k = e.date.toISOString().slice(0, 10) + "|" + e.event; if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+
+  function calendar() {
+    const C = window.BambuCycle, today = calToday();
+    const out = calEvents(0, 3).filter(e => e.days >= 0 && e.days <= 120);
+    if (C) { const h5 = C.halvings.find(h => h.n === 5); if (h5) { const hd = h5.date instanceof Date ? h5.date : new Date(h5.date + "T00:00:00Z"); out.push({ date: hd, event: "5º Halving de Bitcoin (est.)", impact: "alto", type: "cripto", days: Math.round((hd - today) / 86400000) }); } }
+    return out.sort((a, b) => a.days - b.days);
   }
 
   /* sentimiento agregado dinámico: derivado de la temperatura actual del composite BTC
@@ -234,25 +230,10 @@
      los datos reales, no se escribe a mano. */
   function recentEvents() {
     const R = window.BambuRealData && window.BambuRealData.BTC;
-    const iso = window.BambuDataDate || (R ? R.latestIso : null);
-    const today = iso ? new Date(iso + "T00:00:00Z") : new Date();
-    const U = (y, m, d) => new Date(Date.UTC(y, m, d));
-
-    // Eventos con fecha conocida (los mismos que el calendario, ya pasados)
-    const past = [
-      [U(2026, 7, 3),  "Datos de empleo (NFP)", "alto", "macro"],
-      [U(2026, 7, 1),  "ISM manufacturero", "medio", "macro"],
-      [U(2026, 7, 1),  "Cambio de mes: reposicionamiento de carteras", "medio", "cripto"],
-      [U(2026, 6, 31), "Inflación PCE (la que mira la Fed)", "medio", "macro"],
-      [U(2026, 6, 31), "Vencimiento mensual de opciones BTC", "medio", "cripto"],
-      [U(2026, 6, 29), "Decisión de tipos FOMC", "alto", "macro"],
-      [U(2026, 6, 13), "Dato de inflación CPI", "alto", "macro"],
-      [U(2026, 6, 3),  "Datos de empleo (NFP)", "alto", "macro"],
-      [U(2026, 6, 1),  "ISM manufacturero", "medio", "macro"],
-      [U(2026, 5, 26), "Vencimiento trimestral de opciones BTC y ETH", "alto", "cripto"],
-      [U(2026, 5, 17), "Decisión de tipos FOMC", "alto", "macro"],
-      [U(2026, 5, 12), "Dato de inflación CPI", "alto", "macro"],
-    ];
+    const today = calToday();
+    // Mismas reglas que el calendario, filtrando solo lo ya ocurrido (últimos 90 días)
+    const past = calEvents(3, 0).filter(e => e.days < 0 && e.days >= -90)
+                                .map(e => [e.date, e.event, e.impact, e.type]);
 
     const priceAt = (d) => {
       if (!R) return null;
