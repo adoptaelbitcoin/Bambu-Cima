@@ -31,7 +31,9 @@ const KPI = ({ lab, val, meta, valStyle, mono }) => (
 function marketVerdict(results, regime) {
   const mt = marketTemp(results);
   const reg = DD.REGIMES[regime];
-  const zone = E.zoneFor(mt);
+  const H = window.BambuHistory;
+  const t0 = results[0] && results[0].asset ? results[0].asset.type : "BTC";
+  const zone = (H && H.bandsFor) ? H.bandOf(mt, H.bandsFor(t0, "lth", 27).bands) : E.zoneFor(mt);
   const comp = (50 - mt) / 27;
   const sig = E.signalFor(comp);
   const sg = DD.SIGNALS[sig];
@@ -60,8 +62,8 @@ function VerdictBanner({ results, regime, palette, title }) {
       : `Fase ${regime}: sin sesgo claro — mantén tu tamaño habitual de compra (100%).`;
   const reasons = [
     regPhrase,
-    `Temperatura de mercado ${v.mt.toFixed(0)}° → zona ${v.zone.label} (${v.zone.phase}).`,
-    align ? `Corto y largo plazo alineados (${sthT.toFixed(0)}° / ${lthT.toFixed(0)}°): señal más fiable.`
+    `Temperatura de mercado ${v.mt.toFixed(0)}° → zona ${v.zone.label} según la historia completa del activo.`,
+    align ? `Corto y largo plazo alineados (${sthT.toFixed(0)}° / ${lthT.toFixed(0)}°): lectura más fiable.`
           : `Divergencia corto vs largo plazo (${sthT.toFixed(0)}° / ${lthT.toFixed(0)}°): actuar con cautela.`,
   ];
   return (
@@ -78,8 +80,9 @@ function VerdictBanner({ results, regime, palette, title }) {
         <div style={{ padding: "18px 22px", borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em" }}>Exposición sugerida <HelpDot k="posicionamiento" /></div>
           <div className="num" style={{ fontSize: 27, fontWeight: 700, color: col, lineHeight: 1.1, marginTop: 3 }}>{v.capPct.toFixed(1)}%</div>
-          <div className="tiny muted">LONG del portafolio</div>
+          <div className="tiny muted">de tu portafolio en cripto</div>
           <div style={{ marginTop: 6 }}><SignalPill signal={v.sig} /></div>
+          <div className="tiny muted" style={{ marginTop: 8, lineHeight: 1.4 }}>Cuánto tener invertido hoy. Empieza bajo en la acumulación temprana y sube si el mercado enfría más.</div>
         </div>
         <div style={{ padding: "16px 22px", borderLeft: "1px solid var(--border)" }}>
           <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 7 }}>Por qué</div>
@@ -100,8 +103,8 @@ function SectionResumen({ results, regime, palette }) {
   return (
     <div className="fade-in">
       <div className="page-head">
-        <h1>Resumen ejecutivo</h1>
-        <p>Lectura consolidada del modelo v2.2. La <strong>temperatura</strong> traduce cada <strong>Índice de Convicción</strong> a una zona: frío = acumulación, caliente = distribución.</p>
+        <h1>Tu lectura de hoy</h1>
+        <p>El mercado en una zona: <strong>frío</strong> = momento de acumular · <strong>templado</strong> = mantener el plan · <strong>caliente</strong> = repartir salidas. Debajo, el porqué en datos.</p>
       </div>
 
       {/* pestañas por moneda */}
@@ -154,7 +157,7 @@ function ResumenConsolidado({ results, regime, palette }) {
 
       <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr" }}>
         {/* Cuatro señales */}
-        <Card title="Señales del mercado" sub="La barra muestra el estado: azul/frío = zona de compra · rojo/caliente = zona de venta">
+        <Card title="Lecturas del mercado" sub="La barra muestra el estado: azul/frío = zona de compra · rojo/caliente = zona de venta">
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {sigs.slice(0, 4).map((s, i) => {
               const col = E.tempColor(s.temp, palette);
@@ -189,11 +192,11 @@ function ResumenConsolidado({ results, regime, palette }) {
               right={<HelpDot k="estadosSTHLTH" />}>
           {/* los 2 estados que se miden */}
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-            <StateChip lab="Estado STH · corto" temp={sthT} zone={sthZ} palette={palette} />
-            <StateChip lab="Estado LTH · largo" temp={lthT} zone={lthZ} palette={palette} />
+            <StateChip lab="Estado STH · corto" temp={sthT} zone={sthZ} palette={palette} type={btc.asset.type} hz="sth" />
+            <StateChip lab="Estado LTH · largo" temp={lthT} zone={lthZ} palette={palette} type={btc.asset.type} hz="lth" />
           </div>
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <StatBox lab="Hit-rate global" val={(ST.hitRate * 100).toFixed(1) + "%"} sub={`${ST.totalHits}/${ST.totalSignals} señales`} good />
+            <StatBox lab="Hit-rate global" val={(ST.hitRate * 100).toFixed(1) + "%"} sub={`${ST.totalHits}/${ST.totalSignals} lecturas`} good />
             <StatBox lab="Profit factor" val={ST.profitFactor.toFixed(1)} sub="Modelo sólido (≥2)" good />
             <StatBox lab="Max drawdown" val={(ST.maxDrawdown * 100).toFixed(0) + "%"} sub="Peor caída del equity" />
             <StatBox lab="Equity simulado" val={E.fmt.num(ST.equityFinal, 0)} sub="Base 100 · 14 ventanas" good />
@@ -203,15 +206,15 @@ function ResumenConsolidado({ results, regime, palette }) {
 
       {/* Posicionamiento + barra de mercado */}
       <div className="grid" style={{ gridTemplateColumns: "1.4fr 1fr", marginTop: 16 }}>
-        <Card title="Termómetro del mercado" sub="Posición de cada señal en el espectro acumulación → distribución">
+        <Card title="Termómetro del mercado" sub="Posición de cada lectura en el espectro acumulación → distribución">
           <div style={{ padding: "30px 8px 6px" }}>
             <GradientBar palette={palette} markers={dedupeMarkers(sigs.slice(0, 4).map(s => ({ temp: s.temp, label: s.key })))} />
           </div>
         </Card>
 
-        <Card title="Posicionamiento recomendado" sub="Rango LONG sugerido por señal · ajustado por régimen" right={<HelpDot k="posicionamiento" />}>
+        <Card title="Posicionamiento recomendado" sub="Rango LONG sugerido por zona · ajustado por régimen" right={<HelpDot k="posicionamiento" />}>
           <table className="tbl">
-            <thead><tr><th>Señal</th><th className="c">Rango sugerido</th><th className="r">NET</th></tr></thead>
+            <thead><tr><th>Zona</th><th className="c">Rango sugerido</th><th className="r">NET</th></tr></thead>
             <tbody>
               {sigs.slice(0, 4).map((s, i) => {
                 const sz = E.sizing(s.signal, regime, results.find(r => r.asset.ticker === s.ticker).vals.price);
@@ -262,9 +265,12 @@ function PriceKPI({ lab, r, palette }) {
   );
 }
 
-/* chip de estado STH/LTH */
-function StateChip({ lab, temp, zone, palette }) {
-  const col = E.tempColor(temp, palette);
+/* chip de estado STH/LTH — posición por percentil histórico */
+function StateChip({ lab, temp, zone, palette, type, hz }) {
+  const H = window.BambuHistory;
+  const pos = (type && H && H.tempRank) ? H.tempRank(temp, type, hz || "lth", 27) : temp;
+  const band = (type && H && H.bandsFor) ? H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands) : null;
+  const col = E.tempColor(pos, palette);
   const palStops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + palStops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
   return (
@@ -272,10 +278,10 @@ function StateChip({ lab, temp, zone, palette }) {
       <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".04em" }}>{lab}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "4px 0 8px" }}>
         <span className="num" style={{ fontSize: 22, fontWeight: 700, color: col }}>{temp.toFixed(0)}°</span>
-        <span className="badge" style={{ background: mixSoft(col), color: col }}>{zone.label}</span>
+        <span className="badge" style={{ background: mixSoft(col), color: col }}>{band ? band.label : zone.label}</span>
       </div>
       <div style={{ height: 7, borderRadius: 4, background: grad, position: "relative" }}>
-        <div style={{ position: "absolute", left: temp + "%", top: -2, width: 3, height: 11, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 1.5px #fff" }} />
+        <div style={{ position: "absolute", left: pos + "%", top: -2, width: 3, height: 11, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 1.5px #fff" }} />
       </div>
     </div>
   );
@@ -287,17 +293,23 @@ function ResumenAsset({ result, regime, palette }) {
   const reg = DD.REGIMES[regime];
   const H = window.BambuHistory;
   const hist = H && H.raw[a.type] ? H.dailyComposites(a.type, 27) : null;
-  const sthCol = E.tempColor(result.sth.temp, palette);
-  const lthCol = E.tempColor(result.lth.temp, palette);
+  /* calibración única por percentiles: mismos nombres y colores que el Heatmap */
+  const bandsOf = hz => (H && H.bandsFor) ? H.bandsFor(a.type, hz, 27).bands : DD.ZONES;
+  const bOf = (temp, hz) => (H && H.bandOf) ? H.bandOf(temp, bandsOf(hz)) : E.zoneFor(temp);
+  const rankOf = (temp, hz) => (H && H.tempRank) ? H.tempRank(temp, a.type, hz, 27) : temp;
+  const sthBand = bOf(result.sth.temp, "sth"), lthBand = bOf(result.lth.temp, "lth");
+  const sthCol = E.tempColor(rankOf(result.sth.temp, "sth"), palette);
+  const lthCol = E.tempColor(rankOf(result.lth.temp, "lth"), palette);
 
-  const HCard = ({ hr, label }) => {
-    const col = E.tempColor(hr.temp, palette);
+  const HCard = ({ hr, label, hz }) => {
+    const band = bOf(hr.temp, hz), pos = rankOf(hr.temp, hz);
+    const col = E.tempColor(pos, palette);
     return (
       <Card title={`${a.ticker} · ${label}`} right={<SignalPill signal={hr.signal} />}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
           <div>
             <div className="num" style={{ fontSize: 40, fontWeight: 600, color: col, lineHeight: 1 }}>{hr.temp.toFixed(0)}°</div>
-            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".06em", color: col, marginTop: 6 }}>{hr.zone.label} · {hr.zone.phase}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".06em", color: col, marginTop: 6 }}>{band.label}</div>
           </div>
           <div className="spacer" style={{ flex: 1 }} />
           <div style={{ textAlign: "right" }}>
@@ -306,7 +318,7 @@ function ResumenAsset({ result, regime, palette }) {
           </div>
         </div>
         <div style={{ marginTop: 14, height: 8, borderRadius: 5, background: "var(--surface-3)", position: "relative" }}>
-          <div style={{ position: "absolute", left: hr.temp + "%", top: -3, width: 4, height: 14, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)" }} />
+          <div style={{ position: "absolute", left: pos + "%", top: -3, width: 4, height: 14, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)" }} />
         </div>
         <div className="divider" style={{ margin: "14px 0 10px" }} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -329,13 +341,13 @@ function ResumenAsset({ result, regime, palette }) {
       <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 16 }}>
         <PriceKPI lab={`Precio ${a.ticker}`} r={{ vals: a.values }} palette={palette} />
         <KPI lab="Régimen" val={regime} valStyle={{ fontSize: 20, color: "var(--brand)" }} meta={<><span className="badge" style={{ background: "var(--brand-soft)", color: "var(--brand-ink)" }}>{sizeTxt(reg.mult)}</span><HelpDot k="regimen" /></>} />
-        <KPI lab="Temperatura STH" mono val={result.sth.temp.toFixed(0) + "°"} valStyle={{ color: sthCol }} meta={<span className="badge" style={{ background: mixSoft(sthCol), color: sthCol }}>{result.sth.zone.label}</span>} />
-        <KPI lab="Temperatura LTH" mono val={result.lth.temp.toFixed(0) + "°"} valStyle={{ color: lthCol }} meta={<span className="badge" style={{ background: mixSoft(lthCol), color: lthCol }}>{result.lth.zone.label}</span>} />
+        <KPI lab={<>Temperatura STH <HelpDot k="temperatura" /></>} mono val={result.sth.temp.toFixed(0) + "°"} valStyle={{ color: sthCol }} meta={<span className="badge" style={{ background: mixSoft(sthCol), color: sthCol }}>{sthBand.label}</span>} />
+        <KPI lab={<>Temperatura LTH <HelpDot k="temperatura" /></>} mono val={result.lth.temp.toFixed(0) + "°"} valStyle={{ color: lthCol }} meta={<span className="badge" style={{ background: mixSoft(lthCol), color: lthCol }}>{lthBand.label}</span>} />
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <HCard hr={result.sth} label="Corto plazo · STH" />
-        <HCard hr={result.lth} label="Largo plazo · LTH" />
+        <HCard hr={result.sth} label="Corto plazo · STH" hz="sth" />
+        <HCard hr={result.lth} label="Largo plazo · LTH" hz="lth" />
       </div>
 
       {/* decisión global: Índice Bambú + matrices diagnóstico/decisión */}
@@ -368,7 +380,7 @@ function ResumenAsset({ result, regime, palette }) {
                   <div style={{ display: "flex", gap: 18, marginTop: 12, flexWrap: "wrap" }}>
                     <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: "var(--brand)" }}>${inv.toFixed(0)}</div><div className="tiny muted">en {a.ticker}</div></div>
                     {resv >= 0.5 && <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: "#A83C26" }}>${resv.toFixed(0)}</div><div className="tiny muted">cobertura <HelpDot k="posHedge" /></div></div>}
-                    <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: "var(--ink-3)" }}>${wait.toFixed(0)}</div><div className="tiny muted">en espera (USD, resto)</div></div>
+                    <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: "var(--ink-3)" }}>${wait.toFixed(0)}</div><div className="tiny muted">en espera (USD, resto) <HelpDot k="enEspera" /></div></div>
                     <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: net >= 0 ? "var(--brand)" : "#A83C26" }}>${net.toFixed(0)}</div><div className="tiny muted">posición neta <HelpDot k="posNet" /></div></div>
                   </div>
                   {/* barra visual: invertido / cobertura / en espera */}
@@ -379,10 +391,10 @@ function ResumenAsset({ result, regime, palette }) {
                   <div className="tiny muted" style={{ marginTop: 5 }}>█ verde = en {a.ticker} · gris = en espera (USD){resv >= 0.5 ? " · rojo = cobertura" : ""}</div>
                   <div className="tiny muted" style={{ marginTop: 8, lineHeight: 1.55 }}>
                     {hr.signal.indexOf("COMPRA") >= 0
-                      ? `Señal de compra: de cada $100 de tu portafolio total, unos $${inv.toFixed(0)} en ${a.ticker}; el resto espera en USD para comprar en tramos si sigue barato.`
+                      ? `Zona de compra: de cada $100 de tu portafolio total, unos $${inv.toFixed(0)} en ${a.ticker}; el resto espera en USD para comprar en tramos si sigue barato.`
                       : hr.signal.indexOf("VENTA") >= 0
-                        ? `Señal de venta: baja a ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y deja el resto en USD${resv >= 0.5 ? `, con ~$${resv.toFixed(0)} de cobertura` : ""}.`
-                        : `Sin ventaja clara: mantén ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y no añadas hasta que la señal cambie.`}
+                        ? `Zona de venta: baja a ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y deja el resto en USD${resv >= 0.5 ? `, con ~$${resv.toFixed(0)} de cobertura` : ""}.`
+                        : `Sin ventaja clara: mantén ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y no añadas hasta que la zona cambie.`}
                   </div>
                 </div>
               );
@@ -550,7 +562,7 @@ function SectionIngreso({ assets, results, regime, palette, onChange, onAddAsset
             <div style={{ textAlign: "center", padding: "6px 0 4px" }}>
               <div className="num" style={{ fontSize: 46, fontWeight: 600, color: col, lineHeight: 1 }}>{hr.temp.toFixed(0)}°</div>
               <div style={{ marginTop: 8 }}><SignalPill signal={hr.signal} big /></div>
-              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, letterSpacing: ".08em", color: col }}>{hr.zone.label} · {hr.zone.phase}</div>
+              <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, letterSpacing: ".08em", color: col }}>{(window.BambuHistory && window.BambuHistory.bandsFor ? window.BambuHistory.bandOf(hr.temp, window.BambuHistory.bandsFor(asset.type, horizon === "STH" ? "sth" : "lth", 27).bands).label : hr.zone.label)}</div>
             </div>
             <div className="divider" style={{ margin: "14px 0" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 10 }}>

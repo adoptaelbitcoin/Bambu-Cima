@@ -43,7 +43,7 @@ function SectionHistorial({ palette }) {
         iso, label: R.labelEs(iso), price: vals.price,
         chg: prev ? ((vals.price - prev) / prev) * 100 : null,
         sthTemp: res.sth.temp, lthTemp: res.lth.temp,
-        sthZone: res.sth.zone.label, lthZone: res.lth.zone.label,
+        sthZone: window.BambuHistory.zoneOf(res.sth.temp, type, "sth").label, lthZone: window.BambuHistory.zoneOf(res.lth.temp, type, "lth").label,
         stance: v.stance, short: v.short, mt: v.t,
       });
     }

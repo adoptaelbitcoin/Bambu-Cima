@@ -70,7 +70,7 @@ function weekNarrative(w, type) {
   // métrica que más se movió (en valor absoluto normalizado)
   const moved = [...A.metrics].filter(m => m.d != null).sort((x, y) => Math.abs(y.d) - Math.abs(x.d))[0];
   let s = `${name} ${up ? "subió" : "bajó"} un ${Math.abs(A.chg).toFixed(1)}% en la semana, cerrando en ${E.fmt.usd(A.b.price)}. `;
-  s += `La temperatura del modelo ${Math.abs(dTemp) < 1.5 ? "se mantuvo estable" : dTemp > 0 ? "se calentó" : "se enfrió"} de ${A.tempA.toFixed(0)}° a ${A.tempB.toFixed(0)}° (${A.b.lth.zone.label}). `;
+  s += `La temperatura del modelo ${Math.abs(dTemp) < 1.5 ? "se mantuvo estable" : dTemp > 0 ? "se calentó" : "se enfrió"} de ${A.tempA.toFixed(0)}° a ${A.tempB.toFixed(0)}° (${window.BambuHistory.zoneOf(A.tempB, A.t, "lth").label}). `;
   if (sigChange) s += `La señal de largo plazo cambió de ${A.a.lth.signal} a ${A.b.lth.signal}. `;
   else s += `La señal de largo plazo se mantiene en ${A.b.lth.signal}. `;
   if (moved) s += `El movimiento fundamental más relevante fue el ${moved.lab}, que pasó de ${moved.a.toFixed(moved.dec)} a ${moved.b.toFixed(moved.dec)}.`;
@@ -81,7 +81,7 @@ function weekNarrative(w, type) {
 function weekSignals(w) {
   const out = [];
   w.assets.forEach(A => {
-    [["STH", A.b.sth], ["LTH", A.b.lth]].forEach(([h, hr]) => out.push({ key: A.t + "·" + h, ticker: A.t, price: A.b.price, ...hr }));
+    [["STH", A.b.sth], ["LTH", A.b.lth]].forEach(([h, hr]) => out.push({ key: A.t + "·" + h, ticker: A.t, type: A.t, hz: h.toLowerCase(), price: A.b.price, ...hr }));
   });
   return out;
 }
@@ -242,7 +242,7 @@ function InformeSemanal({ results, palette }) {
                   <td style={{ fontWeight: 600 }}>{s.key}</td>
                   <td className="c num">{E.fmt.signed(s.composite)}</td>
                   <td className="c num" style={{ color: col, fontWeight: 600 }}>{s.temp.toFixed(0)}°</td>
-                  <td className="c"><span className="badge" style={{ background: mixSoft(col), color: col }}>{s.zone.label}</span></td>
+                  <td className="c"><span className="badge" style={{ background: mixSoft(col), color: col }}>{window.BambuHistory.zoneOf(s.temp, s.type || s.ticker, s.hz || "lth").label}</span></td>
                   <td><SignalPill signal={s.signal} /></td>
                   <td className="r num">{(sz.longAdj * 100).toFixed(2)}%</td>
                   <td className="r num" style={{ fontWeight: 600, color: sz.net >= 0 ? "var(--brand)" : "#A83C26" }}>{E.fmt.pct(sz.net * 100, 2)}</td>

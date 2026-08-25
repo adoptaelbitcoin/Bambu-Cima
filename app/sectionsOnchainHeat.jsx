@@ -72,11 +72,23 @@ function indexOfMetrics(values, metrics) {
 
 /* ============================================================
    MATRIZ DE DIAGNÓSTICO + MATRIZ DE DECISIÓN (STH × LTH)
-   estado: 0 = Frío/Acumulación · 1 = Neutral · 2 = Caliente/Distribución
+   estado: 0 = Capitulación/Acumulación · 1 = Neutral · 2 = Distribución
    filas = LTH (largo plazo) · columnas = STH (corto plazo)
    ============================================================ */
-const STATE_LABELS = ["Frío · acumulación", "Neutral", "Caliente · distribución"];
-const STATE_SHORT = ["Frío", "Neutral", "Caliente"];
+/* Nombres tomados del mismo vocabulario de bandas del motor */
+const STATE_LABELS = ["Acumulación", "Neutral", "Distribución"];
+const STATE_SHORT = ["Acumulación", "Neutral", "Distribución"];
+/* etiqueta fina según la banda exacta del activo (Capitulación vs Acumulación…) */
+function stateLabel(idx, type, hz) {
+  const H = window.BambuHistory;
+  if (idx == null) return "—";
+  if (type && H && H.bandsFor) {
+    const temp = Math.max(0, Math.min(100, 50 - idx * 50));
+    return H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands).label;
+  }
+  const s = stateOf(idx);
+  return s == null ? "—" : STATE_LABELS[s];
+}
 // [LTH][STH]
 const DIAG = [
   [ // LTH Frío
@@ -112,14 +124,28 @@ const DECISION = [
     { act: "Distribuir fuerte", detail: "Mayoría a cash · cobertura activa." },
   ],
 ];
-function stateOf(idx) { return idx == null ? null : idx >= 0.15 ? 0 : idx <= -0.15 ? 2 : 1; }
+/* Estado (0 fr\u00edo / 1 neutral / 2 caliente) derivado de las MISMAS bandas por
+   percentiles que el resto de Bambu: el \u00edndice se traduce a temperatura y se
+   busca su banda hist\u00f3rica, en vez de usar cortes fijos \u00b10.15. */
+function stateOf(idx, type, hz) {
+  if (idx == null) return null;
+  const H = window.BambuHistory;
+  if (type && H && H.bandsFor) {
+    const temp = Math.max(0, Math.min(100, 50 - idx * 50));
+    const id = H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands).id;
+    if (id === "fria" || id === "temprana") return 0;
+    if (id === "calida" || id === "caliente") return 2;
+    return 1;
+  }
+  return idx >= 0.15 ? 0 : idx <= -0.15 ? 2 : 1;
+}
 
 function DiagMatrices({ type, last, palette }) {
   const sthMetrics = buildHeatMetrics(type, "STH", last);
   const lthMetrics = buildHeatMetrics(type, "LTH", last);
   const sthIdx = indexOfMetrics(last, sthMetrics);
   const lthIdx = indexOfMetrics(last, lthMetrics);
-  const sSt = stateOf(sthIdx), lSt = stateOf(lthIdx);
+  const sSt = stateOf(sthIdx, type, "sth"), lSt = stateOf(lthIdx, type, "lth");
   const diag = (lSt != null && sSt != null) ? DIAG[lSt][sSt] : null;
   const dec = (lSt != null && sSt != null) ? DECISION[lSt][sSt] : null;
   const sthCol = heatScore(sthIdx), lthCol = heatScore(lthIdx);
@@ -158,9 +184,9 @@ function DiagMatrices({ type, last, palette }) {
     <Card title={<>{type} · Diagnóstico y decisión STH × LTH <HelpDot k="diagMatriz" /></>} sub="Cruce del corto plazo (¿conviene comprar ya?) con el largo plazo (¿en qué parte del ciclo estamos?). La casilla ACTUAL es el mercado hoy: la primera matriz dice qué está pasando y la segunda qué hacer con tu capital" style={{ marginBottom: 16 }}>
       {/* resumen */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 16 }}>
-        <span className="pill" style={{ background: mixSoft(sthCol), color: sthCol, fontSize: 13 }}>STH {sthIdx == null ? "—" : (sthIdx > 0 ? "+" : "") + Math.round(sthIdx * 100)} · {sSt != null ? STATE_SHORT[sSt] : "—"}</span>
+        <span className="pill" style={{ background: mixSoft(sthCol), color: sthCol, fontSize: 13 }}>STH {sthIdx == null ? "—" : (sthIdx > 0 ? "+" : "") + Math.round(sthIdx * 100)} · {stateLabel(sthIdx, type, "sth")}</span>
         <span className="muted">×</span>
-        <span className="pill" style={{ background: mixSoft(lthCol), color: lthCol, fontSize: 13 }}>LTH {lthIdx == null ? "—" : (lthIdx > 0 ? "+" : "") + Math.round(lthIdx * 100)} · {lSt != null ? STATE_SHORT[lSt] : "—"}</span>
+        <span className="pill" style={{ background: mixSoft(lthCol), color: lthCol, fontSize: 13 }}>LTH {lthIdx == null ? "—" : (lthIdx > 0 ? "+" : "") + Math.round(lthIdx * 100)} · {stateLabel(lthIdx, type, "lth")}</span>
         <span style={{ flex: 1, minWidth: 12 }} />
         {diag && (
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -384,7 +410,7 @@ function OnchainHeat({ type, palette, k }) {
         <span className="tiny muted" style={{ fontWeight: 600 }}>Distribuir</span>
         <div style={{ flex: 1, height: 12, borderRadius: 6, background: HEAT_GRAD, maxWidth: 420 }} />
         <span className="tiny muted" style={{ fontWeight: 600 }}>Acumular</span>
-        <span className="tiny muted">· verde = acumulación · rojo = distribución · gris = neutral</span>
+        <span className="tiny muted">· verde = capitulación/acumulación · rojo = distribución · gris = neutral</span>
       </div>
 
       {/* PANEL DE CALOR */}

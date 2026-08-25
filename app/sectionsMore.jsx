@@ -2,20 +2,25 @@
    BAMBÚ · Secciones — Heatmap, Backtest, Estadísticas, Sizing
    ============================================================ */
 
-/* ---------- leyenda de zonas reutilizable ---------- */
-function ZoneLegend({ palette, current, horizontal }) {
+/* ---------- leyenda de zonas reutilizable ----------
+   Usa las bandas calibradas por percentiles del activo cuando se le pasan. */
+function ZoneLegend({ palette, current, horizontal, bands }) {
+  const Z = bands || DD.ZONES;
+  const fmt = v => (Math.round(v * 10) / 10).toFixed(0);
+  const PHASE = { fria: "Capitulación", temprana: "Acumulación", neutral: "Equilibrio", calida: "Distribución temprana", caliente: "Distribución" };
+  const ACT = { fria: "Comprar con convicción", temprana: "Acumular en tramos", neutral: "Mantener", calida: "Reducir gradual", caliente: "Distribuir" };
   if (horizontal) {
     return (
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${DD.ZONES.length}, 1fr)`, gap: 10 }}>
-        {DD.ZONES.map(z => {
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Z.length}, 1fr)`, gap: 10 }}>
+        {Z.map(z => {
           const col = E.tempColor(z.temp, palette);
           const on = current && current.id === z.id;
           return (
             <div key={z.id} style={{ padding: "10px 11px", borderRadius: 9, background: on ? mixSoft(col, .8) : "var(--surface-3)", border: on ? `1px solid ${mixSoft(col, .55)}` : "1px solid transparent" }}>
               <div style={{ height: 8, borderRadius: 4, background: col, marginBottom: 8 }} />
               <div style={{ fontSize: 12.5, fontWeight: 600 }}>{z.label}</div>
-              <div className="tiny muted" style={{ marginTop: 2 }}>{z.phase}</div>
-              <div className="num tiny muted" style={{ marginTop: 3 }}>{z.min}–{z.max}°</div>
+              <div className="tiny muted" style={{ marginTop: 2 }}>{z.phase || PHASE[z.id]}</div>
+              <div className="num tiny muted" style={{ marginTop: 3 }}>{fmt(z.min)}–{fmt(z.max)}°</div>
             </div>
           );
         })}
@@ -24,17 +29,17 @@ function ZoneLegend({ palette, current, horizontal }) {
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-      {[...DD.ZONES].reverse().map(z => {
+      {[...Z].reverse().map(z => {
         const col = E.tempColor(z.temp, palette);
         const on = current && current.id === z.id;
         return (
           <div key={z.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "7px 9px", borderRadius: 8, background: on ? mixSoft(col, .8) : "transparent", border: on ? `1px solid ${mixSoft(col, .55)}` : "1px solid transparent" }}>
             <span style={{ width: 30, height: 30, borderRadius: 7, background: col, flex: "none" }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600 }}>{z.label} <span className="tiny muted">· {z.en}</span></div>
-              <div className="tiny muted">{z.phase} → {z.action}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600 }}>{z.label}</div>
+              <div className="tiny muted">{z.phase || PHASE[z.id]} → {z.action || ACT[z.id]}</div>
             </div>
-            <span className="num tiny muted">{z.min}–{z.max}°</span>
+            <span className="num tiny muted">{fmt(z.min)}–{fmt(z.max)}°</span>
           </div>
         );
       })}
@@ -42,19 +47,25 @@ function ZoneLegend({ palette, current, horizontal }) {
   );
 }
 
-/* ---------- termómetro horizontal de mercado ---------- */
-function HorizontalThermo({ temp, zone, palette }) {
-  const col = E.tempColor(temp, palette);
+/* ---------- termómetro horizontal de mercado ----------
+   La aguja se ubica por el percentil histórico (rank) para que "a la izquierda"
+   signifique extremo frío real y "a la derecha" extremo caliente real. */
+function HorizontalThermo({ temp, zone, palette, type, hz }) {
+  const H = window.BambuHistory;
+  const rank = (type && H && H.tempRank) ? H.tempRank(temp, type, hz || "lth", 27) : temp;
+  const col = E.tempColor(rank, palette);
   const stops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + stops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
-  const t = Math.max(0, Math.min(100, temp));
+  const t = Math.max(0, Math.min(100, rank));
+  const band = (type && H && H.bandsFor) ? H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands) : null;
+  const zz = (type && H && H.zoneOf) ? H.zoneOf(temp, type, hz || "lth") : {};
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
       {/* lectura grande */}
       <div style={{ flex: "none", minWidth: 150 }}>
         <div className="num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1, color: col }}>{temp.toFixed(0)}°</div>
-        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", marginTop: 8, color: col }}>{zone.label} · {zone.en}</div>
-        <div className="tiny muted" style={{ marginTop: 4 }}>{zone.phase} → <strong style={{ color: "var(--ink)" }}>{zone.action}</strong></div>
+        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", marginTop: 8, color: col }}>{band ? band.label : zone.label + " · " + zone.en}</div>
+        <div className="tiny muted" style={{ marginTop: 4 }}>{(zz.phase || zone.phase)} → <strong style={{ color: "var(--ink)" }}>{zz.action || zone.action}</strong></div>
       </div>
       {/* barra horizontal */}
       <div style={{ flex: 1, minWidth: 320 }}>
@@ -64,8 +75,9 @@ function HorizontalThermo({ temp, zone, palette }) {
           <div style={{ position: "absolute", left: t + "%", top: -26, transform: "translateX(-50%)", background: col, color: E.readableText(col), fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, whiteSpace: "nowrap" }} className="num">{temp.toFixed(0)}°</div>
         </div>
         <div className="gbar-scale" style={{ marginTop: 10 }}>
-          <span>0 · Acumulación</span><span>25 · Temprana</span><span>50 · Neutral</span><span>75 · Cálida</span><span>100 · Distribución</span>
+          <span>Extremo frío</span><span>Frío</span><span>Neutral</span><span>Cálido</span><span>Extremo caliente</span>
         </div>
+        <div className="tiny muted" style={{ marginTop: 6, lineHeight: 1.45 }}>La posición es el <strong>percentil histórico</strong>: a la izquierda del todo significa que solo un puñado de días en la historia del activo estuvieron más fríos que hoy.</div>
       </div>
     </div>
   );
@@ -74,12 +86,38 @@ function HorizontalThermo({ temp, zone, palette }) {
 /* ============================================================
    HEATMAP DE ZONAS
    ============================================================ */
+/* ---------- bandas de zona por horizonte ----------
+   El LTH se mueve lento y en rango amplio: frío hasta 35, caliente desde 60.
+   El STH oscila en un rango más estrecho, así que sus bandas se ajustan para que
+   una lectura baja se lea como fría y una alta como caliente. */
+const TEMP_BANDS = {
+  lth: [
+    { id: "fria",     min: 0,  max: 35,  label: "FRÍA · acumulación",   temp: 12 },
+    { id: "temprana", min: 35, max: 47,  label: "TEMPRANA",             temp: 32 },
+    { id: "neutral",  min: 47, max: 60,  label: "NEUTRAL",              temp: 50 },
+    { id: "caliente", min: 60, max: 100, label: "CALIENTE · distribuir", temp: 82 },
+  ],
+  sth: [
+    { id: "fria",     min: 0,  max: 30,  label: "FRÍA · acumulación",   temp: 12 },
+    { id: "temprana", min: 30, max: 45,  label: "TEMPRANA",             temp: 32 },
+    { id: "neutral",  min: 45, max: 60,  label: "NEUTRAL",              temp: 50 },
+    { id: "caliente", min: 60, max: 100, label: "CALIENTE · distribuir", temp: 82 },
+  ],
+};
+
+/* ---------- calibración compartida (history.js) ---------- */
+function histBands(type, hz, k) { return window.BambuHistory.bandsFor(type, hz, k || 27); }
+function bandFor(temp, bands) { return window.BambuHistory.bandOf(temp, bands); }
+
 /* ---------- gráfica de temperatura con bandas de zona ---------- */
-function TempChart({ data, palette, height = 132 }) {
-  const w = 440, pad = { l: 30, r: 10, t: 8, b: 18 };
+function TempChart({ data, palette, height = 132, bands, lo = 0, hi = 100 }) {
+  const ZB = bands || DD.ZONES;
+  const w = 440, pad = { l: 30, r: 76, t: 8, b: 18 };
   const n = data.length;
   const X = i => pad.l + (n <= 1 ? 0.5 : i / (n - 1)) * (w - pad.l - pad.r);
-  const Y = t => pad.t + (1 - Math.max(0, Math.min(100, t)) / 100) * (height - pad.t - pad.b);
+  const span = Math.max(1, hi - lo);
+  const Y = t => pad.t + (1 - (Math.max(lo, Math.min(hi, t)) - lo) / span) * (height - pad.t - pad.b);
+  const mid = Math.round((lo + hi) / 2);
   const pts = data.map((d, i) => `${X(i)},${Y(d.temp)}`).join(" ");
   const cur = data[n - 1];
   const curCol = E.tempColor(cur.temp, palette);
@@ -87,14 +125,25 @@ function TempChart({ data, palette, height = 132 }) {
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
       {/* bandas de zona (frío abajo→caliente arriba) */}
-      {[...DD.ZONES].map(z => {
+      {ZB.map(z => {
         const y0 = Y(z.max), y1 = Y(z.min), col = E.tempColor(z.temp, palette);
         return <rect key={z.id} x={pad.l} y={y0} width={w - pad.l - pad.r} height={y1 - y0} fill={mixSoft(col, 0.74)} />;
       })}
-      {[0, 50, 100].map(t => <line key={t} x1={pad.l} y1={Y(t)} x2={w - pad.r} y2={Y(t)} stroke="rgba(0,0,0,.06)" strokeWidth="1" />)}
-      <text x={pad.l - 6} y={Y(92) + 3} textAnchor="end" fontSize="8" fill="#A83C26" fontWeight="700">100</text>
-      <text x={pad.l - 6} y={Y(50) + 3} textAnchor="end" fontSize="8" fill="#8C9389">50</text>
-      <text x={pad.l - 6} y={Y(8) + 3} textAnchor="end" fontSize="8" fill="#2E6FAE" fontWeight="700">0</text>
+      {/* nombre de cada banda y su rango */}
+      {ZB.map(z => {
+        const col = E.tempColor(z.temp, palette), yc = (Y(z.max) + Y(z.min)) / 2;
+        if (Y(z.min) - Y(z.max) < 9) return null;
+        return (
+          <g key={"lb" + z.id}>
+            <text x={w - pad.r + 5} y={yc - 1} fontSize="7.2" fill={col} fontWeight="700">{z.label}</text>
+            <text x={w - pad.r + 5} y={yc + 7} fontSize="6.6" fill="#9AA29A" fontFamily="var(--mono)">{z.min.toFixed(0)}–{z.max.toFixed(0)}°</text>
+          </g>
+        );
+      })}
+      {[lo, mid, hi].map(t => <line key={t} x1={pad.l} y1={Y(t)} x2={w - pad.r} y2={Y(t)} stroke="rgba(0,0,0,.06)" strokeWidth="1" />)}
+      <text x={pad.l - 6} y={Y(hi) + 8} textAnchor="end" fontSize="8" fill="#A83C26" fontWeight="700">{hi.toFixed(0)}</text>
+      <text x={pad.l - 6} y={Y(mid) + 3} textAnchor="end" fontSize="8" fill="#8C9389">{mid}</text>
+      <text x={pad.l - 6} y={Y(lo) - 2} textAnchor="end" fontSize="8" fill="#2E6FAE" fontWeight="700">{lo.toFixed(0)}</text>
       {/* línea de temperatura */}
       <polyline points={pts} fill="none" stroke="#1B2420" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" opacity="0.78" />
       <circle cx={X(n - 1)} cy={Y(cur.temp)} r="4.5" fill={curCol} stroke="#fff" strokeWidth="1.8" />
@@ -126,8 +175,8 @@ function SectionHeatmap({ results, regime, palette, k }) {
   const tempItems = [];
   results.forEach(r => {
     const series = H.rangeComposites(r.asset.type, k, specDays, 260);
-    tempItems.push({ key: `${r.asset.ticker}·LTH · ciclo`, hr: r.lth, data: series.map(d => ({ x: xlab(d.iso), temp: d.lthTemp })) });
-    tempItems.push({ key: `${r.asset.ticker}·STH · corto plazo`, hr: r.sth, data: series.map(d => ({ x: xlab(d.iso), temp: d.sthTemp })) });
+    tempItems.push({ key: `${r.asset.ticker} · LTH · ciclo (largo plazo)`, hz: "lth", type: r.asset.type, hr: r.lth, data: series.map(d => ({ x: xlab(d.iso), temp: d.lthTemp })) });
+    tempItems.push({ key: `${r.asset.ticker} · STH · corto plazo`, hz: "sth", type: r.asset.type, hr: r.sth, data: series.map(d => ({ x: xlab(d.iso), temp: d.sthTemp })) });
   });
 
   return (
@@ -148,9 +197,9 @@ function SectionHeatmap({ results, regime, palette, k }) {
 
       {/* termómetro horizontal */}
       <Card title="Termómetro de mercado" sub="Temperatura media de las señales activas">
-        <HorizontalThermo temp={mt} zone={mz} palette={palette} />
+        <HorizontalThermo temp={mt} zone={mz} palette={palette} type={results[0].asset.type} hz="lth" />
         <div className="divider" style={{ margin: "18px 0 14px" }} />
-        <ZoneLegend palette={palette} current={mz} horizontal />
+        <ZoneLegend palette={palette} current={window.BambuHistory.bandOf(mt, window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands)} horizontal bands={window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands} />
       </Card>
 
       {/* matriz composite por activo × horizonte */}
@@ -158,16 +207,21 @@ function SectionHeatmap({ results, regime, palette, k }) {
         <HeatMatrix palette={palette} rows={["STH · corto", "LTH · largo"]} cols={assets}
           cell={(ri, ci) => {
             const r = results[ci];
+            const hz = ri === 0 ? "sth" : "lth";
             const hr = ri === 0 ? r.sth : r.lth;
-            return { temp: hr.temp, text: hr.temp.toFixed(0) + "°", title: `${r.asset.ticker} ${ri === 0 ? "STH" : "LTH"} · ${hr.signal}` };
+            const zz = window.BambuHistory.zoneOf(hr.temp, r.asset.type, hz);
+            /* color por percentil histórico: la misma calibración del espectro */
+            return { temp: zz.rank != null ? zz.rank : hr.temp, text: hr.temp.toFixed(0) + "°",
+                     title: `${r.asset.ticker} ${hz.toUpperCase()} · ${zz.label} · ${hr.signal}` };
           }} />
         <div className="legend" style={{ marginTop: 14 }}>
-          {DD.ZONES.map(z => <span key={z.id} className="li"><span className="sw" style={{ background: E.tempColor(z.temp, palette) }} />{z.label}</span>)}
+          {window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands.map(z =>
+            <span key={z.id} className="li"><span className="sw" style={{ background: E.tempColor(z.temp, palette) }} />{z.label} <span className="num tiny muted">{z.min.toFixed(0)}–{z.max.toFixed(0)}°</span></span>)}
         </div>
       </Card>
 
       {/* Espectro acumulación → distribución: gráficas de temperatura por item */}
-      <Card title="Espectro acumulación → distribución · evolución de temperatura" sub="Cómo se ha movido la temperatura en el tiempo: cuando la línea baja a la franja azul el mercado estuvo barato (zona de compra) y cuando sube a la roja estuvo caro (zona de venta)" style={{ marginTop: 16 }}>
+      <Card title="Espectro acumulación → distribución · evolución de temperatura" sub="Bandas calibradas con la distribución histórica del activo: los valles caen en la franja azul (extremo frío, zona de compra) y los picos suben a la roja (extremo caliente, zona de venta)" style={{ marginTop: 16 }}>
         {/* menú de periodo */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
           <label className="tiny muted" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>Periodo</label>
@@ -178,17 +232,20 @@ function SectionHeatmap({ results, regime, palette, k }) {
         </div>
         <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
           {tempItems.map((it, i) => {
-            const col = E.tempColor(it.hr.temp, palette);
+            const hb = histBands(it.type, it.hz, k);
+            const bands = hb.bands;
+            const band = bandFor(it.hr.temp, bands);
+            const col = E.tempColor(band.temp, palette);
             return (
               <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{it.key}</span>
                   <span className="num" style={{ fontWeight: 700, color: col }}>{it.hr.temp.toFixed(0)}°</span>
-                  <span className="badge" style={{ background: mixSoft(col), color: col }}>{it.hr.zone.label}</span>
+                  <span className="badge" style={{ background: mixSoft(col), color: col }}>{band.label}</span>
                   <span className="spacer" style={{ flex: 1 }} />
                   <SignalPill signal={it.hr.signal} />
                 </div>
-                <TempChart data={it.data} palette={palette} />
+                <TempChart data={it.data} palette={palette} bands={bands} lo={hb.lo} hi={hb.hi} height={158} />
               </div>
             );
           })}
@@ -197,7 +254,7 @@ function SectionHeatmap({ results, regime, palette, k }) {
         <div style={{ background: "var(--surface-3)", borderRadius: 11, padding: "13px 16px", marginTop: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--ink-3)", marginBottom: 7 }}>Cómo leer estas gráficas</div>
           <div className="tiny" style={{ lineHeight: 1.65, color: "var(--ink-2)" }}>
-            Cada gráfica es la <strong>temperatura</strong> de un horizonte a lo largo del tiempo (0° = frío extremo, 100° = caliente extremo). Cuando la línea entra en la <strong>franja azul (abajo)</strong>, el mercado estuvo en zona de acumulación: los mejores momentos históricos de compra. Cuando entra en la <strong>franja roja (arriba)</strong>, en zona de distribución: los momentos de asegurar ganancias. Amplía el periodo a ciclos completos para ver cómo cada visita al azul precedió una subida y cada visita al rojo un techo — y dónde está la línea hoy respecto a esa historia. El <strong>STH</strong> (corto plazo) visita las zonas más a menudo y sirve para tus aportes; el <strong>LTH</strong> (ciclo) se mueve lento y marca las decisiones de patrimonio.
+            Cada gráfica es la <strong>temperatura</strong> de un horizonte a lo largo del tiempo. Las bandas no son cortes arbitrarios: se calculan con la <strong>distribución histórica completa</strong> del propio activo — la franja azul es el <strong>10% de días más fríos de toda su historia</strong> y la roja el 10% más calientes. Por eso los <strong>valles de la línea caen en el azul y los picos suben al rojo</strong>: cuando eso ocurre, el mercado está de verdad en un extremo histórico, no solo alto respecto a la última semana. El eje encuadra el rango real en que se mueve la métrica, así que la línea ya no queda plana en el centro. Amplía el periodo a ciclos completos para comprobar cómo cada visita al azul precedió una subida y cada visita al rojo un techo. El STH sirve para tus aportes; el LTH marca las decisiones de patrimonio.
           </div>
         </div>
       </Card>
@@ -222,6 +279,7 @@ function SectionHeatmap({ results, regime, palette, k }) {
 }
 
 function SectionMatrix({ results, horizon, palette }) {
+  const H = window.BambuHistory;
   const palStops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + palStops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
   const multi = results.length > 1;
@@ -229,8 +287,10 @@ function SectionMatrix({ results, horizon, palette }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {results.map(r => r[horizon].groups.map((g, gi) => {
         const temp = Math.max(2, Math.min(98, 50 - g.sectionScore * 50));
-        const zone = E.zoneFor(temp);
-        const col = E.tempColor(temp, palette);
+        const bands = H && H.bandsFor ? H.bandsFor(r.asset.type, horizon, 27).bands : null;
+        const band = bands ? H.bandOf(temp, bands) : null;
+        const pos = H && H.tempRank ? H.tempRank(temp, r.asset.type, horizon, 27) : temp;
+        const col = E.tempColor(pos, palette);
         return (
           <div key={r.asset.ticker + gi} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 13px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -238,15 +298,15 @@ function SectionMatrix({ results, horizon, palette }) {
               <span className="tiny muted">peso {(g.weight * 100).toFixed(0)}%</span>
               <span style={{ flex: 1 }} />
               <span className="num tiny" style={{ fontWeight: 700 }}>{E.fmt.signed(g.sectionScore)}</span>
-              <span className="badge" style={{ background: mixSoft(col), color: col }}>{zone.label}</span>
+              <span className="badge" style={{ background: mixSoft(col), color: col }}>{band ? band.label : E.zoneFor(temp).label}</span>
             </div>
-            {/* espectro frío → caliente con marcador */}
+            {/* espectro frío → caliente con marcador (posición = percentil histórico) */}
             <div style={{ position: "relative", height: 9, borderRadius: 5, background: grad, marginTop: 9 }}>
-              <div style={{ position: "absolute", left: temp + "%", top: -3, width: 4, height: 15, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 2px #fff" }}></div>
+              <div style={{ position: "absolute", left: pos + "%", top: -3, width: 4, height: 15, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 2px #fff" }}></div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-              <span className="tiny" style={{ color: E.tempColor(8, palette), fontWeight: 600 }}>frío · compra</span>
-              <span className="tiny" style={{ color: E.tempColor(92, palette), fontWeight: 600 }}>caliente · venta</span>
+              <span className="tiny" style={{ color: E.tempColor(8, palette), fontWeight: 600 }}>extremo frío · compra</span>
+              <span className="tiny" style={{ color: E.tempColor(92, palette), fontWeight: 600 }}>extremo caliente · venta</span>
             </div>
           </div>
         );
@@ -386,7 +446,7 @@ function SectionBacktest({ palette, k, assets }) {
             </thead>
             <tbody>
               {bt.map((d, i) => {
-                const t = tempOf(d.comp), z = E.zoneFor(t), col = E.tempColor(t, palette);
+                const t = tempOf(d.comp), z = window.BambuHistory.zoneOf(t, useAsset, horizon === "STH" ? "sth" : "lth"), col = E.tempColor(z.rank != null ? z.rank : t, palette);
                 return (
                   <tr key={i} className={d.today ? "today" : ""}>
                     <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{d.date}</td>

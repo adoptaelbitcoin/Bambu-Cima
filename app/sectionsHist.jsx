@@ -189,8 +189,8 @@ function SectionHistorico({ results, regime, palette, k, snapshots, onSaveSnapsh
             <ThermoGauge temp={curHr.temp} palette={palette} size={280} />
             <div className="gauge-read">
               <div className="gauge-temp" style={{ color: E.tempColor(curHr.temp, palette) }}>{curHr.temp.toFixed(0)}°</div>
-              <div className="gauge-zone" style={{ color: E.tempColor(curHr.temp, palette) }}>{curHr.zone.label}</div>
-              <div className="gauge-phase">{curHr.zone.phase} → <strong>{curHr.zone.action}</strong></div>
+              <div className="gauge-zone" style={{ color: E.tempColor(curHr.temp, palette) }}>{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").label}</div>
+              <div className="gauge-phase">{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").phase} → <strong>{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").action}</strong></div>
             </div>
           </div>
           {/* curva con bandas */}

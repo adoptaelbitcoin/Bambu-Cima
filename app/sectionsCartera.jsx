@@ -204,7 +204,7 @@ function SectionCartera({ results, regime, palette, portfolio, setPortfolio }) {
             <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
               <span className="tiny"><span className="muted">Señal</span> <SignalPill signal={hz.signal} /></span>
               <span className="tiny"><span className="muted">Temp.</span> <strong className="num" style={{ color: mv.col }}>{hz.temp.toFixed(0)}°</strong></span>
-              <span className="tiny"><span className="muted">Zona</span> <strong>{hz.zone.label}</strong></span>
+              <span className="tiny"><span className="muted">Zona</span> <strong>{window.BambuHistory.zoneOf(hz.temp, planRes.asset.type, planHz === "STH" ? "sth" : "lth").label}</strong></span>
               <span className="tiny"><span className="muted">Régimen</span> <strong>×{regMult.toFixed(2)}</strong></span>
             </div>
           </div>

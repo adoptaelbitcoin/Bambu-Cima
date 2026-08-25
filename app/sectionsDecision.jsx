@@ -38,13 +38,15 @@ function SectionEscenarios({ palette, k }) {
     </div>
   );
   const Res = ({ hr, label }) => {
-    const col = E.tempColor(hr.temp, palette);
+    const hzK = /STH|corto/i.test(label) ? "sth" : "lth";
+    const zz = window.BambuHistory.zoneOf(hr.temp, whatTk, hzK);
+    const col = E.tempColor(zz.rank != null ? zz.rank : hr.temp, palette);
     return (
       <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", flex: 1 }}>
         <div className="tiny muted">{label}</div>
         <div className="num" style={{ fontSize: 30, fontWeight: 600, color: col, lineHeight: 1.1 }}>{hr.temp.toFixed(0)}°</div>
         <div style={{ marginTop: 6 }}><SignalPill signal={hr.signal} /></div>
-        <div className="tiny" style={{ marginTop: 6, fontWeight: 600, color: col }}>{hr.zone.label} · {hr.zone.phase}</div>
+        <div className="tiny" style={{ marginTop: 6, fontWeight: 600, color: col }}>{zz.label}</div>
         <div className="tiny muted" style={{ marginTop: 4 }}>composite <span className="num">{E.fmt.signed(hr.composite)}</span></div>
       </div>
     );

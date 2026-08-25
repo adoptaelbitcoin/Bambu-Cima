@@ -100,13 +100,17 @@
     if (init) Object.assign(init.values, R.latest);
     raw[type] = R.lastDays(DAYS);
   });
-  try { window.BambuDataDate = "2026-08-21"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
+  try { window.BambuDataDate = "2026-08-25"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
   function realRows(days, type) { const R = realOf(type || "BTC"); return R ? R.lastDays(days) : (raw[type || "BTC"] || raw.BTC); }
 
-  /* ----- composite diario derivado del motor ----- */
+  /* ----- composite diario derivado del motor (con caché: recalcularlo en cada
+     render cuesta miles de llamadas al motor y bloquea el hilo) ----- */
+  const _dcCache = {};
   function dailyComposites(type, k) {
+    const ck = type + "|" + (k || 27);
+    if (_dcCache[ck]) return _dcCache[ck];
     const E = window.BambuEngine;
-    return raw[type].map(row => {
+    return _dcCache[ck] = raw[type].map(row => {
       const res = E.computeAsset({ type, values: row.values }, { k });
       return { label: row.label, iso: row.iso, date: row.date,
                sth: res.sth.composite, lth: res.lth.composite,
@@ -144,11 +148,14 @@
 
   /* ----- composites diarios para un rango de días (BTC real) -----
      Downsample a <= maxPoints para mantener el render fluido. */
+  const _rcCache = {};
   function rangeComposites(type, k, days, maxPoints) {
+    const ck = type + "|" + (k || 27) + "|" + days + "|" + (maxPoints || 380);
+    if (_rcCache[ck]) return _rcCache[ck];
     const E = window.BambuEngine;
     let rows = realOf(type) ? realOf(type).lastDays(days) : raw[type];
     rows = sample(rows, maxPoints || 380);
-    return rows.map(row => {
+    return _rcCache[ck] = rows.map(row => {
       const res = E.computeAsset({ type, values: row.values }, { k });
       return { label: row.label, iso: row.iso,
                sth: res.sth.composite, lth: res.lth.composite,
@@ -165,7 +172,76 @@
     return out;
   }
 
-  /* ----- backtest real desde puntos de inflexión históricos -----
+  /* ----- bandas y percentiles calibrados con la historia completa -----
+     Todas las gráficas de temperatura de Bambu usan esta misma calibración:
+     las bandas nacen de la distribución real del activo (decil frío / decil
+     caliente), no de cortes fijos 0-100. */
+  const _bandCache = {};
+  function quantile(sorted, q) {
+    if (!sorted.length) return null;
+    const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p);
+    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo);
+  }
+  function bandsFor(type, hz, k) {
+    k = k || 27;
+    const key = type + hz + k;
+    if (_bandCache[key]) return _bandCache[key];
+    let vals = [];
+    try {
+      const all = rangeComposites(type, k, 4000, 1200);
+      vals = all.map(d => hz === "lth" ? d.lthTemp : d.sthTemp).filter(v => v != null).sort((a, b) => a - b);
+    } catch (e) {}
+    const FALLBACK = { bands: [
+      { id: "fria", min: 0, max: 30, label: "CAPITULACIÓN", temp: 10 },
+      { id: "temprana", min: 30, max: 45, label: "ACUMULACIÓN", temp: 30 },
+      { id: "neutral", min: 45, max: 60, label: "NEUTRAL", temp: 50 },
+      { id: "calida", min: 60, max: 80, label: "DISTRIBUCIÓN TEMPRANA", temp: 70 },
+      { id: "caliente", min: 80, max: 100, label: "DISTRIBUCIÓN",          temp: 90 },
+    ], lo: 0, hi: 100, vals: null };
+    if (vals.length < 60) return _bandCache[key] = FALLBACK;
+    const r = v => Math.round(v * 10) / 10;
+    const q = [quantile(vals, .10), quantile(vals, .32), quantile(vals, .68), quantile(vals, .90)].map(r);
+    const lo = r(Math.max(0, quantile(vals, .004) - 2)), hi = r(Math.min(100, quantile(vals, .996) + 2));
+    const bands = [
+      { id: "fria",     min: lo,   max: q[0], label: "CAPITULACIÓN",          temp: 10 },
+      { id: "temprana", min: q[0], max: q[1], label: "ACUMULACIÓN",           temp: 30 },
+      { id: "neutral",  min: q[1], max: q[2], label: "NEUTRAL",               temp: 50 },
+      { id: "calida",   min: q[2], max: q[3], label: "DISTRIBUCIÓN TEMPRANA", temp: 70 },
+      { id: "caliente", min: q[3], max: hi,   label: "DISTRIBUCIÓN",          temp: 90 },
+    ];
+    return _bandCache[key] = { bands, lo, hi, vals };
+  }
+  /* posición percentil (0-100) de una temperatura en la historia del activo:
+     el valor que deben usar los colores y las barras para que "frío" y
+     "caliente" signifiquen extremo histórico y no un corte arbitrario. */
+  function tempRank(temp, type, hz, k) {
+    const b = bandsFor(type, hz, k);
+    if (!b.vals || temp == null) return temp;
+    const v = b.vals; let lo = 0, hi = v.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < temp) lo = m + 1; else hi = m; }
+    return Math.max(0, Math.min(100, (lo / v.length) * 100));
+  }
+  function bandOf(temp, bands) {
+    const t = temp == null ? 0 : temp;
+    for (const z of bands) if (t >= z.min && t < z.max) return z;
+    return t >= bands[bands.length - 1].min ? bands[bands.length - 1] : bands[0];
+  }
+
+  /* Zona unica para toda la suite: etiqueta, fase, accion y percentil,
+     derivadas de la distribucion historica del activo. */
+  const _PHASE = { fria: "Capitulación", temprana: "Acumulación", neutral: "Equilibrio", calida: "Distribuci\u00f3n temprana", caliente: "Distribuci\u00f3n" };
+  const _ACT = { fria: "Comprar con convicción", temprana: "Acumular en tramos", neutral: "Mantener", calida: "Reducir gradual", caliente: "Distribuir" };
+  function zoneOf(temp, type, hz, k) {
+    const E = window.BambuEngine;
+    if (temp == null) return { label: "—", phase: "", action: "", rank: 0, id: "neutral" };
+    if (!type) { const z = E.zoneFor(temp); return { label: z.label, phase: z.phase, action: z.action, rank: temp, id: z.id }; }
+    const b = bandsFor(type, hz || "lth", k || 27);
+    const z = bandOf(temp, b.bands);
+    return { label: z.label, phase: z.phase || _PHASE[z.id], action: z.action || _ACT[z.id],
+             rank: tempRank(temp, type, hz || "lth", k || 27), id: z.id, min: z.min, max: z.max };
+  }
+
+  /* ----- backtest real desde puntos de inflexi\u00f3n hist\u00f3ricos -----
      composite calculado con el motor sobre datos reales + retorno 90d real */
   const BT_DATES = {
     BTC: [
@@ -249,6 +325,7 @@
   window.BambuHistory = {
     DAYS, raw, dailyComposites, SNAPSHOTS, metricCatalog,
     REAL, realOf, isReal: t => !!realOf(t), realRows, rangeComposites, realBacktest, realStats, sample,
+    bandsFor, tempRank, bandOf, quantile, zoneOf,
     RANGES: [{ d: 90, l: "90 días" }, { d: 365, l: "1 año" }, { d: 730, l: "2 años" }, { d: 1460, l: "4 años" }, { d: 999999, l: "Máximo" }],
     valueSeries(type, key) {
       return (raw[type] || []).map(r => ({ label: r.label, iso: r.iso, value: m_value(type, key, r.values) }));

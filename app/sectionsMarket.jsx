@@ -28,7 +28,7 @@ function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
   const col = E.tempColor(v.temp, palette);
   const stops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + stops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
-  const sz = E.zoneFor(structTemp);
+  const sz = window.BambuHistory.zoneOf(structTemp, (results[0]&&results[0].asset?results[0].asset.type:"BTC"), "lth");
   const execCol = v.exec.startsWith("Sí") ? E.tempColor(v.temp < 50 ? 18 : 88, palette) : v.exec === "Con cautela" ? E.tempColor(40, palette) : "var(--ink-2)";
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: `6px solid ${col}`, padding: 0, overflow: "hidden" }}>
