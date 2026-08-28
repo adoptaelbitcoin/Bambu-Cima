@@ -43,7 +43,7 @@ function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
             <div style={{ position: "absolute", left: fgVal + "%", top: -4, width: 4, height: 16, background: "#fff", border: "2px solid #1B2420", borderRadius: 2, transform: "translateX(-50%)" }} title="Sentimiento (F&G)" />
           </div>
           <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
-            <span className="tiny muted"><span style={{ display: "inline-block", width: 9, height: 9, background: "#1B2420", borderRadius: 2, marginRight: 5, verticalAlign: "middle" }} />Estructura {structTemp.toFixed(0)}°</span>
+            <span className="tiny muted"><span style={{ display: "inline-block", width: 9, height: 9, background: "#1B2420", borderRadius: 2, marginRight: 5, verticalAlign: "middle" }} />Estructura {structTemp.toFixed(0)} de 100</span>
             <span className="tiny muted"><span style={{ display: "inline-block", width: 9, height: 9, background: "#fff", border: "2px solid #1B2420", borderRadius: 2, marginRight: 5, verticalAlign: "middle" }} />Sentimiento {fgVal}</span>
           </div>
         </div>
@@ -60,7 +60,7 @@ function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
           <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 7 }}>Por qué</div>
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
             {[
-              `Estructura on-chain ${structTemp.toFixed(0)}° → ${sz.label} (${structTemp < 50 ? "barato" : "caro"}).`,
+              `Estructura on-chain ${structTemp.toFixed(0)} de 100 → ${sz.label} (${structTemp < 40 ? "barato frente a su historial" : structTemp > 60 ? "caro frente a su historial" : "en su rango habitual"}).`,
               `Sentimiento Fear & Greed ${fgVal} · ${fgLabel}.`,
               `Momentum BTC ${mom7 >= 0 ? "+" : ""}${(mom7 * 100).toFixed(1)}% en 7 días.`,
               v.liqNote,
@@ -344,14 +344,20 @@ function SectionMacro({ results, palette }) {
   const impactColor = { alto: "#C0492E", medio: "#D69A40", bajo: "#9AA0A8" };
   const socialCol = E.tempColor(s.social, palette);
 
-  const structTemp = (results && results.length) ? marketTemp(results) : 50;
+  /* La estructura se mide en la escala publicada: cada horizonte contra su propia
+   distribución y se promedian los ranks, igual que el termómetro y marketVerdict.
+   Con la temperatura cruda la conclusión salía invertida ("barato" a 50 crudo
+   cuando el mercado está en 62 de 100). */
+  const structTemp = (results && results.length && window.BambuHistory && window.BambuHistory.zoneOf)
+    ? results.reduce((acc, r) => acc + (window.BambuHistory.zoneOf(r.sth.temp, r.asset.type, "sth", 27).rank + window.BambuHistory.zoneOf(r.lth.temp, r.asset.type, "lth", 27).rank) / 2, 0) / results.length
+    : ((results && results.length) ? marketTemp(results) : 50);
   const mv = macroVerdict(structTemp, s, cal);
   const mvCol = E.tempColor(mv.temp, palette);
   const reasons = [
     mv.next ? `Próximo catalizador: ${mv.next.event} en ${mv.next.days}d (impacto ${mv.next.impact}).` : null,
     `Sentimiento social ${s.social} · ${s.socialLabel}.`,
     `Funding ${s.fundingAvg}% (${s.fundingLabel}) · Put/Call ${s.putCall} (${s.putCallLabel}).`,
-    `Estructura on-chain ${structTemp.toFixed(0)}° → ${structTemp < 50 ? "barato" : "caro"}.`,
+    `Estructura on-chain ${structTemp.toFixed(0)} de 100 → ${structTemp < 40 ? "barato frente a su historial" : structTemp > 60 ? "caro frente a su historial" : "en su rango habitual"}.`,
   ].filter(Boolean);
 
   return (

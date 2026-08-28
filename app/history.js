@@ -100,7 +100,7 @@
     if (init) Object.assign(init.values, R.latest);
     raw[type] = R.lastDays(DAYS);
   });
-  try { window.BambuDataDate = "2026-08-25"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
+  try { window.BambuDataDate = "2026-08-28"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
   function realRows(days, type) { const R = realOf(type || "BTC"); return R ? R.lastDays(days) : (raw[type || "BTC"] || raw.BTC); }
 
   /* ----- composite diario derivado del motor (con caché: recalcularlo en cada
@@ -176,6 +176,16 @@
      Todas las gráficas de temperatura de Bambu usan esta misma calibración:
      las bandas nacen de la distribución real del activo (decil frío / decil
      caliente), no de cortes fijos 0-100. */
+  /* Escala publicada de Bambu: la temperatura se expresa como su POSICION en la
+     historia del activo (0 = nunca estuvo mas frio, 100 = nunca mas caliente),
+     y sobre esa escala los cortes son fijos y memorizables. */
+  const FIXED_BANDS = [
+    { id: "fria",     min: 0,  max: 20,  label: "CAPITULACIÓN",          temp: 10 },
+    { id: "temprana", min: 20, max: 40,  label: "ACUMULACIÓN",           temp: 30 },
+    { id: "neutral",  min: 40, max: 60,  label: "EQUILIBRIO",            temp: 50 },
+    { id: "calida",   min: 60, max: 80,  label: "DISTRIBUCIÓN TEMPRANA", temp: 70 },
+    { id: "caliente", min: 80, max: 100, label: "DISTRIBUCIÓN",          temp: 90 },
+  ];
   const _bandCache = {};
   function quantile(sorted, q) {
     if (!sorted.length) return null;
@@ -188,29 +198,12 @@
     if (_bandCache[key]) return _bandCache[key];
     let vals = [];
     try {
-      const all = rangeComposites(type, k, 4000, 1200);
-      vals = all.map(d => hz === "lth" ? d.lthTemp : d.sthTemp).filter(v => v != null).sort((a, b) => a - b);
+      const all = rangeComposites(type, k, 99999, 2000);
+      vals = all.map(d => hz === "lth" ? d.lthTemp : d.sthTemp).filter(v => v != null).sort((x, y) => x - y);
     } catch (e) {}
-    const FALLBACK = { bands: [
-      { id: "fria", min: 0, max: 30, label: "CAPITULACIÓN", temp: 10 },
-      { id: "temprana", min: 30, max: 45, label: "ACUMULACIÓN", temp: 30 },
-      { id: "neutral", min: 45, max: 60, label: "NEUTRAL", temp: 50 },
-      { id: "calida", min: 60, max: 80, label: "DISTRIBUCIÓN TEMPRANA", temp: 70 },
-      { id: "caliente", min: 80, max: 100, label: "DISTRIBUCIÓN",          temp: 90 },
-    ], lo: 0, hi: 100, vals: null };
-    if (vals.length < 60) return _bandCache[key] = FALLBACK;
-    const r = v => Math.round(v * 10) / 10;
-    const q = [quantile(vals, .10), quantile(vals, .32), quantile(vals, .68), quantile(vals, .90)].map(r);
-    const lo = r(Math.max(0, quantile(vals, .004) - 2)), hi = r(Math.min(100, quantile(vals, .996) + 2));
-    const bands = [
-      { id: "fria",     min: lo,   max: q[0], label: "CAPITULACIÓN",          temp: 10 },
-      { id: "temprana", min: q[0], max: q[1], label: "ACUMULACIÓN",           temp: 30 },
-      { id: "neutral",  min: q[1], max: q[2], label: "NEUTRAL",               temp: 50 },
-      { id: "calida",   min: q[2], max: q[3], label: "DISTRIBUCIÓN TEMPRANA", temp: 70 },
-      { id: "caliente", min: q[3], max: hi,   label: "DISTRIBUCIÓN",          temp: 90 },
-    ];
-    return _bandCache[key] = { bands, lo, hi, vals };
+    return _bandCache[key] = { bands: FIXED_BANDS, lo: 0, hi: 100, vals: vals.length >= 60 ? vals : null };
   }
+
   /* posición percentil (0-100) de una temperatura en la historia del activo:
      el valor que deben usar los colores y las barras para que "frío" y
      "caliente" signifiquen extremo histórico y no un corte arbitrario. */
@@ -232,13 +225,14 @@
   const _PHASE = { fria: "Capitulación", temprana: "Acumulación", neutral: "Equilibrio", calida: "Distribuci\u00f3n temprana", caliente: "Distribuci\u00f3n" };
   const _ACT = { fria: "Comprar con convicción", temprana: "Acumular en tramos", neutral: "Mantener", calida: "Reducir gradual", caliente: "Distribuir" };
   function zoneOf(temp, type, hz, k) {
-    const E = window.BambuEngine;
     if (temp == null) return { label: "—", phase: "", action: "", rank: 0, id: "neutral" };
-    if (!type) { const z = E.zoneFor(temp); return { label: z.label, phase: z.phase, action: z.action, rank: temp, id: z.id }; }
-    const b = bandsFor(type, hz || "lth", k || 27);
-    const z = bandOf(temp, b.bands);
-    return { label: z.label, phase: z.phase || _PHASE[z.id], action: z.action || _ACT[z.id],
-             rank: tempRank(temp, type, hz || "lth", k || 27), id: z.id, min: z.min, max: z.max };
+    if (!type) { const r0 = Math.round(temp); const z = bandOf(r0, FIXED_BANDS); return { label: z.label, phase: _PHASE[z.id], action: _ACT[z.id], rank: r0, id: z.id, min: z.min, max: z.max }; }
+    /* Se redondea UNA vez y la etiqueta sale del valor redondeado: si no, en un
+       corte de banda la cifra impresa y su etiqueta caen en zonas distintas
+       (39,65 se imprime "40" pero se etiquetaba como ACUMULACIÓN). */
+    const rank = Math.round(tempRank(temp, type, hz || "lth", k || 27));
+    const z = bandOf(rank, FIXED_BANDS);
+    return { label: z.label, phase: _PHASE[z.id], action: _ACT[z.id], rank: rank, id: z.id, min: z.min, max: z.max };
   }
 
   /* ----- backtest real desde puntos de inflexi\u00f3n hist\u00f3ricos -----
@@ -282,6 +276,15 @@
     const E = window.BambuEngine;
     const sig = c => E.signalFor(c);
     const compOf = res => horizon === "STH" ? res.sth.composite : horizon === "LTH" ? res.lth.composite : res.lth.composite * 0.6 + res.sth.composite * 0.4;
+    /* La señal se clasifica en la escala publicada: los agregados (hit-rate,
+       niveles, equity, profit factor) tienen que contar el mismo conjunto que
+       muestran las filas, o el resumen describe otro backtest. */
+    const hzKey = horizon === "STH" ? "sth" : "lth";
+    const sigRank = c => {
+      const t = 50 - c * 27;
+      const rk = zoneOf(t, type, hzKey, k).rank;
+      return { sig: E.signalFor((50 - rk) / 27), rank: rk };
+    };
     const out = [];
     (BT_DATES[type] || BT_DATES.BTC).forEach(d => {
       let i = R.indexOfIso(d.iso);
@@ -297,18 +300,20 @@
       const comp = compOf(res);
       const fwd = i + 90 < R.count ? R.price(i + 90) : null;
       const mov = fwd ? (fwd / R.price(i) - 1) * 100 : null;
+      const sr = sigRank(comp);
       out.push({ date: R.labelEs(d.iso) + " " + d.iso.slice(0, 4), iso: d.iso, evt: d.evt,
         price: R.price(i), comp, sth: res.sth.composite, lth: res.lth.composite,
-        sig: sig(comp), temp: E.temperature(comp, k), mov,
+        sig: sr.sig, rank: sr.rank, temp: E.temperature(comp, k), mov,
         out: mov == null ? "En curso" : (mov >= 0 ? "+" : "") + mov.toFixed(0) + "% en 90 días" });
     });
     // hoy
     const lv = R.latest;
     const lr = E.computeAsset({ type, values: lv }, { k });
     const lc = compOf(lr);
+    const lsr = sigRank(lc);
     out.push({ date: "Hoy " + R.latestIso, iso: R.latestIso, evt: "Lectura actual",
       price: lv.price, comp: lc, sth: lr.sth.composite, lth: lr.lth.composite,
-      sig: sig(lc), temp: E.temperature(lc, k), mov: null, out: "En curso", today: true });
+      sig: lsr.sig, rank: lsr.rank, temp: E.temperature(lc, k), mov: null, out: "En curso", today: true });
     return out;
   }
   function shift(iso, days) { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
@@ -325,7 +330,7 @@
   window.BambuHistory = {
     DAYS, raw, dailyComposites, SNAPSHOTS, metricCatalog,
     REAL, realOf, isReal: t => !!realOf(t), realRows, rangeComposites, realBacktest, realStats, sample,
-    bandsFor, tempRank, bandOf, quantile, zoneOf,
+    bandsFor, tempRank, bandOf, quantile, zoneOf, FIXED_BANDS,
     RANGES: [{ d: 90, l: "90 días" }, { d: 365, l: "1 año" }, { d: 730, l: "2 años" }, { d: 1460, l: "4 años" }, { d: 999999, l: "Máximo" }],
     valueSeries(type, key) {
       return (raw[type] || []).map(r => ({ label: r.label, iso: r.iso, value: m_value(type, key, r.values) }));

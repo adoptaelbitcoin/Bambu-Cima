@@ -20,7 +20,7 @@ function ZoneLegend({ palette, current, horizontal, bands }) {
               <div style={{ height: 8, borderRadius: 4, background: col, marginBottom: 8 }} />
               <div style={{ fontSize: 12.5, fontWeight: 600 }}>{z.label}</div>
               <div className="tiny muted" style={{ marginTop: 2 }}>{z.phase || PHASE[z.id]}</div>
-              <div className="num tiny muted" style={{ marginTop: 3 }}>{fmt(z.min)}–{fmt(z.max)}°</div>
+              <div className="num tiny muted" style={{ marginTop: 3 }}>{fmt(z.min)}–{fmt(z.max)}</div>
             </div>
           );
         })}
@@ -39,7 +39,7 @@ function ZoneLegend({ palette, current, horizontal, bands }) {
               <div style={{ fontSize: 12.5, fontWeight: 600 }}>{z.label}</div>
               <div className="tiny muted">{z.phase || PHASE[z.id]} → {z.action || ACT[z.id]}</div>
             </div>
-            <span className="num tiny muted">{fmt(z.min)}–{fmt(z.max)}°</span>
+            <span className="num tiny muted">{fmt(z.min)}–{fmt(z.max)}</span>
           </div>
         );
       })}
@@ -50,20 +50,21 @@ function ZoneLegend({ palette, current, horizontal, bands }) {
 /* ---------- termómetro horizontal de mercado ----------
    La aguja se ubica por el percentil histórico (rank) para que "a la izquierda"
    signifique extremo frío real y "a la derecha" extremo caliente real. */
-function HorizontalThermo({ temp, zone, palette, type, hz }) {
+function HorizontalThermo({ temp, zone, palette, type, hz, pos }) {
   const H = window.BambuHistory;
-  const rank = (type && H && H.tempRank) ? H.tempRank(temp, type, hz || "lth", 27) : temp;
+  /* pos ya viene en la escala publicada; si no, se deriva del propio temp */
+  const rank = pos != null ? pos : ((type && H && H.tempRank) ? H.tempRank(temp, type, hz || "lth", 27) : temp);
   const col = E.tempColor(rank, palette);
   const stops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + stops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
   const t = Math.max(0, Math.min(100, rank));
-  const band = (type && H && H.bandsFor) ? H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands) : null;
-  const zz = (type && H && H.zoneOf) ? H.zoneOf(temp, type, hz || "lth") : {};
+  const band = (H && H.bandOf && H.FIXED_BANDS) ? H.bandOf(rank, H.FIXED_BANDS) : null;
+  const zz = (H && H.zoneOf) ? H.zoneOf(rank, null) : {};
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
       {/* lectura grande */}
       <div style={{ flex: "none", minWidth: 150 }}>
-        <div className="num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1, color: col }}>{temp.toFixed(0)}°</div>
+        <div className="num" style={{ fontSize: 52, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1, color: col }}>{rank.toFixed(0)} <span style={{ fontSize: 20, fontWeight: 500, color: "var(--ink-3)" }}>/100</span></div>
         <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", marginTop: 8, color: col }}>{band ? band.label : zone.label + " · " + zone.en}</div>
         <div className="tiny muted" style={{ marginTop: 4 }}>{(zz.phase || zone.phase)} → <strong style={{ color: "var(--ink)" }}>{zz.action || zone.action}</strong></div>
       </div>
@@ -72,7 +73,7 @@ function HorizontalThermo({ temp, zone, palette, type, hz }) {
         <div style={{ position: "relative", height: 34, borderRadius: 8, background: grad, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06)" }}>
           {/* aguja */}
           <div style={{ position: "absolute", left: t + "%", top: -6, bottom: -6, width: 5, background: "#1B2420", borderRadius: 3, transform: "translateX(-50%)", boxShadow: "0 0 0 2.5px #fff" }} />
-          <div style={{ position: "absolute", left: t + "%", top: -26, transform: "translateX(-50%)", background: col, color: E.readableText(col), fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, whiteSpace: "nowrap" }} className="num">{temp.toFixed(0)}°</div>
+          <div style={{ position: "absolute", left: t + "%", top: -26, transform: "translateX(-50%)", background: col, color: E.readableText(col), fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 5, whiteSpace: "nowrap" }} className="num">{rank.toFixed(0)}</div>
         </div>
         <div className="gbar-scale" style={{ marginTop: 10 }}>
           <span>Extremo frío</span><span>Frío</span><span>Neutral</span><span>Cálido</span><span>Extremo caliente</span>
@@ -136,7 +137,7 @@ function TempChart({ data, palette, height = 132, bands, lo = 0, hi = 100 }) {
         return (
           <g key={"lb" + z.id}>
             <text x={w - pad.r + 5} y={yc - 1} fontSize="7.2" fill={col} fontWeight="700">{z.label}</text>
-            <text x={w - pad.r + 5} y={yc + 7} fontSize="6.6" fill="#9AA29A" fontFamily="var(--mono)">{z.min.toFixed(0)}–{z.max.toFixed(0)}°</text>
+            <text x={w - pad.r + 5} y={yc + 7} fontSize="6.6" fill="#9AA29A" fontFamily="var(--mono)">{z.min.toFixed(0)}–{z.max.toFixed(0)}</text>
           </g>
         );
       })}
@@ -156,6 +157,11 @@ function TempChart({ data, palette, height = 132, bands, lo = 0, hi = 100 }) {
 function SectionHeatmap({ results, regime, palette, k }) {
   k = k || 27;
   const H = window.BambuHistory;
+  /* la posición del mercado se calcula igual que en marketVerdict: cada
+     horizonte contra su propia distribución, y se promedian los ranks */
+  const mktPos = (H && H.zoneOf && results.length)
+    ? results.reduce((acc, r) => acc + (H.zoneOf(r.sth.temp, r.asset.type, "sth", k).rank + H.zoneOf(r.lth.temp, r.asset.type, "lth", k).rank) / 2, 0) / results.length
+    : null;
   const [tab, setTab] = React.useState(results[0].asset.id);
   const active = results.some(r => r.asset.id === tab) ? tab : results[0].asset.id;
   const allResults = results;
@@ -196,14 +202,14 @@ function SectionHeatmap({ results, regime, palette, k }) {
       </div>
 
       {/* termómetro horizontal */}
-      <Card title="Termómetro de mercado" sub="Temperatura media de las señales activas">
-        <HorizontalThermo temp={mt} zone={mz} palette={palette} type={results[0].asset.type} hz="lth" />
+      <Card title="Termómetro de mercado" sub="Posición del mercado en la escala 0-100 · media de los dos plazos de cada activo">
+        <HorizontalThermo temp={mt} zone={mz} palette={palette} pos={mktPos} />
         <div className="divider" style={{ margin: "18px 0 14px" }} />
-        <ZoneLegend palette={palette} current={window.BambuHistory.bandOf(mt, window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands)} horizontal bands={window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands} />
+        <ZoneLegend palette={palette} current={H.bandOf(mktPos != null ? mktPos : mt, H.FIXED_BANDS)} horizontal bands={H.FIXED_BANDS} />
       </Card>
 
       {/* matriz composite por activo × horizonte */}
-      <Card title="Temperatura por activo y horizonte" sub="Cada celda = temperatura del composite (°) · hoy" style={{ marginTop: 16 }}>
+      <Card title="Temperatura por activo y horizonte" sub="Cada celda = lectura del composite (0-100) · hoy" style={{ marginTop: 16 }}>
         <HeatMatrix palette={palette} rows={["STH · corto", "LTH · largo"]} cols={assets}
           cell={(ri, ci) => {
             const r = results[ci];
@@ -211,17 +217,17 @@ function SectionHeatmap({ results, regime, palette, k }) {
             const hr = ri === 0 ? r.sth : r.lth;
             const zz = window.BambuHistory.zoneOf(hr.temp, r.asset.type, hz);
             /* color por percentil histórico: la misma calibración del espectro */
-            return { temp: zz.rank != null ? zz.rank : hr.temp, text: hr.temp.toFixed(0) + "°",
+            return { temp: zz.rank != null ? zz.rank : hr.temp, text: (zz.rank != null ? zz.rank : hr.temp).toFixed(0),
                      title: `${r.asset.ticker} ${hz.toUpperCase()} · ${zz.label} · ${hr.signal}` };
           }} />
         <div className="legend" style={{ marginTop: 14 }}>
           {window.BambuHistory.bandsFor(results[0].asset.type, "lth", 27).bands.map(z =>
-            <span key={z.id} className="li"><span className="sw" style={{ background: E.tempColor(z.temp, palette) }} />{z.label} <span className="num tiny muted">{z.min.toFixed(0)}–{z.max.toFixed(0)}°</span></span>)}
+            <span key={z.id} className="li"><span className="sw" style={{ background: E.tempColor(z.temp, palette) }} />{z.label} <span className="num tiny muted">{z.min.toFixed(0)}–{z.max.toFixed(0)}</span></span>)}
         </div>
       </Card>
 
       {/* Espectro acumulación → distribución: gráficas de temperatura por item */}
-      <Card title="Espectro acumulación → distribución · evolución de temperatura" sub="Bandas calibradas con la distribución histórica del activo: los valles caen en la franja azul (extremo frío, zona de compra) y los picos suben a la roja (extremo caliente, zona de venta)" style={{ marginTop: 16 }}>
+      <Card title="Espectro acumulación → distribución · evolución de temperatura" sub="Escala 0-100 = posición frente a su propio historial. Bajo 20 nunca estuvo mucho más frío (zona de compra); sobre 80 nunca mucho más caliente (zona de venta)" style={{ marginTop: 16 }}>
         {/* menú de periodo */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
           <label className="tiny muted" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>Periodo</label>
@@ -232,20 +238,24 @@ function SectionHeatmap({ results, regime, palette, k }) {
         </div>
         <div className="grid" style={{ gridTemplateColumns: "1fr", gap: 16 }}>
           {tempItems.map((it, i) => {
+            const H2 = window.BambuHistory;
             const hb = histBands(it.type, it.hz, k);
             const bands = hb.bands;
-            const band = bandFor(it.hr.temp, bands);
+            const zz = H2.zoneOf(it.hr.temp, it.type, it.hz, k);
+            const band = bandFor(zz.rank, bands);
             const col = E.tempColor(band.temp, palette);
+            /* el eje es la posicion historica (0-100), asi los cortes son fijos */
+            const rdata = it.data.map(p => ({ ...p, temp: H2.tempRank(p.temp, it.type, it.hz, k) }));
             return (
               <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                   <span style={{ fontWeight: 700, fontSize: 13 }}>{it.key}</span>
-                  <span className="num" style={{ fontWeight: 700, color: col }}>{it.hr.temp.toFixed(0)}°</span>
+                  <span className="num" style={{ fontWeight: 700, color: col }}>{zz.rank.toFixed(0)}</span>
                   <span className="badge" style={{ background: mixSoft(col), color: col }}>{band.label}</span>
                   <span className="spacer" style={{ flex: 1 }} />
-                  <SignalPill signal={it.hr.signal} />
+                  <SignalPill signal={E.signalFor((50 - zz.rank) / 27)} />
                 </div>
-                <TempChart data={it.data} palette={palette} bands={bands} lo={hb.lo} hi={hb.hi} height={158} />
+                <TempChart data={rdata} palette={palette} bands={bands} lo={0} hi={100} height={158} />
               </div>
             );
           })}
@@ -376,8 +386,10 @@ function SectionBacktest({ palette, k, assets }) {
   })() : null;
   const SIG_ORDER = ["COMPRA FUERTE", "COMPRA NATURAL", "COMPRA TEMPRANA", "NEUTRAL", "REDUCIR", "VENTA", "VENTA FUERTE"];
   const buckets = real ? SIG_ORDER.map(sig => {
-    const rows = bt.filter(d => d.sig === sig);
-    const dir = rows.filter(d => d.mov != null);
+    /* solo eventos con resultado conocido: la fila "Lectura actual" no es
+       evidencia, y contarla inflaba la N frente al hit-rate del titular */
+    const rows = bt.filter(d => d.sig === sig && d.mov != null);
+    const dir = rows;
     const directional = sig !== "NEUTRAL";
     let hits = 0; dir.forEach(d => { const bull = sig.indexOf("COMPRA") >= 0; if ((bull && d.mov > 0) || (!bull && d.mov < 0)) hits++; });
     const avg = dir.length ? dir.reduce((s, d) => s + d.mov, 0) / dir.length : null;
@@ -415,7 +427,7 @@ function SectionBacktest({ palette, k, assets }) {
       </div>
       {!filtered && perDays < 99999 && <div className="tiny" style={{ background: "var(--surface-3)", borderRadius: 9, padding: "9px 13px", marginBottom: 14, color: "var(--ink-2)" }}>En ese periodo no hay puntos de inflexión registrados además de la lectura actual — se muestran todos los ciclos. Los periodos cortos (90/180 días) suelen contener pocos eventos: el backtest gana sentido en ventanas de ciclo.</div>}
 
-      <Card title="Índice de Convicción a lo largo del tiempo" sub="Línea = convicción · punto coloreado por temperatura · línea base en 0">
+      <Card title="Índice de Convicción a lo largo del tiempo" sub="Línea = convicción · punto coloreado por la lectura 0-100 · línea base en 0">
         <LineChart data={lineData} height={210} baseline={0} palette={palette} dotTemp color="#586259"
           yFmt={v => v.toFixed(1)} />
       </Card>
@@ -424,9 +436,11 @@ function SectionBacktest({ palette, k, assets }) {
       <Card title={`Tira térmica · ${bt.length} fechas`} className="" style={{ marginTop: 16 }}>
         <div style={{ display: "flex", gap: 3 }}>
           {bt.map((d, i) => {
-            const t = tempOf(d.comp), col = E.tempColor(t, palette);
+            const t = tempOf(d.comp);
+            const zb = window.BambuHistory.zoneOf(t, useAsset, horizon === "STH" ? "sth" : "lth");
+            const col = E.tempColor(zb.rank != null ? zb.rank : t, palette);
             return (
-              <div key={i} style={{ flex: 1, textAlign: "center" }} title={`${d.date} · ${d.evt} · ${t.toFixed(0)}°`}>
+              <div key={i} style={{ flex: 1, textAlign: "center" }} title={`${d.date} · ${d.evt} · ${(zb.rank != null ? zb.rank : t).toFixed(0)} de 100 · ${zb.label}`}>
                 <div style={{ height: 46, borderRadius: 6, background: col, display: "flex", alignItems: "center", justifyContent: "center", color: E.readableText(col), fontFamily: "var(--mono)", fontSize: 12, fontWeight: 600, border: d.today ? "2px solid #1B2420" : "none" }}>{t.toFixed(0)}</div>
                 <div className="tiny muted" style={{ marginTop: 5, fontSize: 9.5, lineHeight: 1.2 }}>{d.date}</div>
               </div>
@@ -441,7 +455,7 @@ function SectionBacktest({ palette, k, assets }) {
             <thead>
               <tr>
                 <th>Fecha</th><th>Evento</th><th className="r">Precio</th><th className="c">Convicción</th>
-                <th className="c">Temp.</th><th className="c">Zona</th><th>Señal</th><th className="r">Mov. 90d</th><th>Outcome</th>
+                <th className="c">Lectura /100</th><th className="c">Zona</th><th>Señal</th><th className="r">Mov. 90d</th><th>Outcome</th>
               </tr>
             </thead>
             <tbody>
@@ -453,7 +467,7 @@ function SectionBacktest({ palette, k, assets }) {
                     <td className="muted">{d.evt}</td>
                     <td className="r num">{E.fmt.usd(d.price)}</td>
                     <td className="c num" style={{ fontWeight: 600 }}>{E.fmt.signed(d.comp)}</td>
-                    <td className="c"><span className="num" style={{ fontWeight: 600, color: col }}>{t.toFixed(0)}°</span></td>
+                    <td className="c"><span className="num" style={{ fontWeight: 600, color: col }}>{(z.rank != null ? z.rank : t).toFixed(0)}</span></td>
                     <td className="c"><span className="badge" style={{ background: mixSoft(col), color: col }}>{z.label}</span></td>
                     <td><SignalPill signal={d.sig} /></td>
                     <td className="r num" style={{ fontWeight: 600, color: d.mov > 0 ? "var(--brand)" : d.mov < 0 ? "#A83C26" : "var(--ink-3)" }}>{d.mov == null ? "—" : E.fmt.pct(d.mov)}</td>
@@ -509,7 +523,7 @@ function SectionBacktest({ palette, k, assets }) {
             </tbody>
           </table>
         </Card>
-        <Card title="Equity curve simulada" sub="Capital 100 inicial · long si señal positiva, cash si negativa, 50% en neutral">
+        <Card title="Equity curve simulada" sub="Capital 100 inicial · long si la señal es de compra, cash si es de venta">
           <LineChart data={curve} height={230} color="#3E7C57" yFmt={v => Math.round(v)} />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12 }}>
             <span className="muted">Equity final</span>
@@ -519,13 +533,14 @@ function SectionBacktest({ palette, k, assets }) {
       </div>
 
       {/* ===== BACKTEST DE CORTOS (SHORT) ===== */}
-      <ShortBacktest bt={bt} useAsset={useAsset} palette={palette} />
+      <ShortBacktest bt={bt} useAsset={useAsset} palette={palette} horizon={horizon} />
     </div>
   );
 }
 
 /* ---------- backtest aparte: señales de venta operadas en corto (short) ---------- */
-function ShortBacktest({ bt, useAsset, palette }) {
+function ShortBacktest({ bt, useAsset, palette, horizon }) {
+  /* d.sig ya viene clasificado en la escala publicada desde realBacktest */
   const shorts = bt.filter(d => d.mov != null && (d.sig.indexOf("VENTA") >= 0 || d.sig === "REDUCIR"));
   const Head = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "26px 0 14px" }}>
@@ -619,8 +634,10 @@ function SectionStats({ palette, k, assets }) {
   // buckets calculados desde el backtest
   const SIG_ORDER = ["COMPRA FUERTE", "COMPRA NATURAL", "COMPRA TEMPRANA", "NEUTRAL", "REDUCIR", "VENTA", "VENTA FUERTE"];
   const buckets = real ? SIG_ORDER.map(sig => {
-    const rows = bt.filter(d => d.sig === sig);
-    const dir = rows.filter(d => d.mov != null);
+    /* solo eventos con resultado conocido: la fila "Lectura actual" no es
+       evidencia, y contarla inflaba la N frente al hit-rate del titular */
+    const rows = bt.filter(d => d.sig === sig && d.mov != null);
+    const dir = rows;
     const directional = sig !== "NEUTRAL";
     let hits = 0; dir.forEach(d => { const bull = sig.indexOf("COMPRA") >= 0; if ((bull && d.mov > 0) || (!bull && d.mov < 0)) hits++; });
     const avg = dir.length ? dir.reduce((s, d) => s + d.mov, 0) / dir.length : null;
@@ -686,7 +703,7 @@ function SectionStats({ palette, k, assets }) {
           </table>
         </Card>
 
-        <Card title="Equity curve simulada" sub="Capital 100 inicial · long si señal positiva, cash si negativa, 50% en neutral">
+        <Card title="Equity curve simulada" sub="Capital 100 inicial · long si la señal es de compra, cash si es de venta">
           <LineChart data={curve} height={230} color="#3E7C57" yFmt={v => Math.round(v)} />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 12 }}>
             <span className="muted">Equity final</span>

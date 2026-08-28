@@ -25,6 +25,7 @@ const NAVGROUPS = [
   ]},
   { label: "Validación", items: [
     { id: "backtest", label: "Backtest & Stats", icon: "backtest" },
+    { id: "historial",label: "Historial de lecturas", icon: "historial" },
     { id: "sizing",   label: "Sizing & Stops",  icon: "sizing" },
     { id: "reporte",  label: "Reporte 360",     icon: "reporte" },
   ]},
@@ -33,11 +34,12 @@ const NAVGROUPS = [
   ]},
 ];
 const TITLES = {
-  resumen: ["Resumen ejecutivo", "Lectura consolidada del modelo v2.2"],
+  resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
   heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
   historico:["Histórico de datos", "Series diarias y comparativos BTC / ETH"],
   ciclo:   ["Ciclo Halving +", "Ciclos, fases alcistas/bajistas y proyección"],
   backtest:["Backtest & Estadísticas", "Puntos de inflexión + hit-rate, profit factor y resultados"],
+  historial:["Historial de lecturas", "Qué habría dicho Bambu cada día desde 2017"],
   sizing:  ["Sizing & Stops", "Gestión de riesgo LONG / SHORT"],
   onchain: ["On-chain ampliado", "Cohortes, flujos y ballenas"],
   macro:   ["Macro & sentimiento", "Calendario económico y sentimiento"],
@@ -170,12 +172,13 @@ function App() {
     const P = page;
     if (!TITLES[P]) return null;
     switch (page) {
-      case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} />;
+      case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} onGo={setPage} />;
       case "heatmap":  return <SectionHeatmap results={results} regime={regime} palette={palette} k={k} />;
       case "historico":return <SectionHistorico results={results} regime={regime} palette={palette} k={k}
                                 snapshots={snapshots} onSaveSnapshot={onSaveSnapshot} />;
       case "ciclo":    return <SectionCiclo palette={palette} />;
       case "backtest": return <SectionBacktest palette={palette} k={k} assets={assets} />;
+      case "historial": return <SectionHistorial palette={palette} />;
       case "sizing":   return <SectionSizing results={results} regime={regime} palette={palette} />;
       case "onchain":  return <SectionOnchain results={results} palette={palette} k={k} />;
       case "macro":    return <SectionMacro results={results} palette={palette} />;

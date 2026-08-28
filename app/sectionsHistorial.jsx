@@ -37,13 +37,16 @@ function SectionHistorial({ palette }) {
       if (Number(iso.slice(0, 4)) !== year) continue;
       const vals = R.rowAt(i);
       const res = E.computeAsset({ type, values: vals }, { k: 27 });
-      const v = histVerdict(res.sth.temp, res.lth.temp);
+      /* las columnas y el veredicto viven en la escala publicada 0-100 */
+      const rS = window.BambuHistory.zoneOf(res.sth.temp, type, "sth", 27);
+      const rL = window.BambuHistory.zoneOf(res.lth.temp, type, "lth", 27);
+      const v = histVerdict(rS.rank, rL.rank);
       const prev = i > 0 ? R.cols.price[i - 1] : null;
       out.push({
         iso, label: R.labelEs(iso), price: vals.price,
         chg: prev ? ((vals.price - prev) / prev) * 100 : null,
-        sthTemp: res.sth.temp, lthTemp: res.lth.temp,
-        sthZone: window.BambuHistory.zoneOf(res.sth.temp, type, "sth").label, lthZone: window.BambuHistory.zoneOf(res.lth.temp, type, "lth").label,
+        sthTemp: rS.rank, lthTemp: rL.rank,
+        sthZone: rS.label, lthZone: rL.label,
         stance: v.stance, short: v.short, mt: v.t,
       });
     }
@@ -64,7 +67,7 @@ function SectionHistorial({ palette }) {
   const stanceCol = s => s === "ACUMULAR" ? "#2F7D5B" : s === "REDUCIR/DISTRIBUIR" ? "#C0492E" : "#7A8A80";
 
   const exportCsv = () => {
-    const head = ["Fecha", "Precio USD", "Var %", "Temp STH", "Temp LTH", "Zona STH", "Zona LTH", "Veredicto", "Acción"];
+    const head = ["Fecha", "Precio USD", "Var %", "Lectura STH /100", "Lectura LTH /100", "Zona STH", "Zona LTH", "Veredicto", "Acción"];
     const body = filtered.map(r => [r.iso, r.price != null ? r.price.toFixed(2) : "", r.chg != null ? r.chg.toFixed(2) : "",
       r.sthTemp.toFixed(1), r.lthTemp.toFixed(1), r.sthZone, r.lthZone, r.stance, r.short]);
     const csv = [head, ...body].map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -112,7 +115,7 @@ function SectionHistorial({ palette }) {
             <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--card)" }}>
               <tr>
                 <th>Fecha</th><th className="c">Precio</th><th className="c">Var</th>
-                <th className="c">Temp STH</th><th className="c">Temp LTH</th>
+                <th className="c">STH /100</th><th className="c">LTH /100</th>
                 <th className="c">Veredicto</th><th>Qué decía</th>
               </tr>
             </thead>
@@ -124,8 +127,8 @@ function SectionHistorial({ palette }) {
                     <td className="tiny" style={{ whiteSpace: "nowrap", fontWeight: 500 }}>{r.label}</td>
                     <td className="c num">{r.price == null ? "—" : "$" + r.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}</td>
                     <td className="c num tiny" style={{ color: r.chg == null ? "var(--ink-3)" : r.chg >= 0 ? "#2F7D5B" : "#C0492E" }}>{r.chg == null ? "—" : (r.chg > 0 ? "+" : "") + r.chg.toFixed(1) + "%"}</td>
-                    <td className="c"><span className="badge num" style={{ background: mixSoft(sc), color: sc, fontWeight: 700 }}>{r.sthTemp.toFixed(0)}°</span></td>
-                    <td className="c"><span className="badge num" style={{ background: mixSoft(lc), color: lc, fontWeight: 700 }}>{r.lthTemp.toFixed(0)}°</span></td>
+                    <td className="c"><span className="badge num" style={{ background: mixSoft(sc), color: sc, fontWeight: 700 }}>{r.sthTemp.toFixed(0)}</span></td>
+                    <td className="c"><span className="badge num" style={{ background: mixSoft(lc), color: lc, fontWeight: 700 }}>{r.lthTemp.toFixed(0)}</span></td>
                     <td className="c"><span className="badge" style={{ background: mixSoft(vc), color: vc, fontWeight: 700, whiteSpace: "nowrap" }}>{r.stance}</span></td>
                     <td className="tiny muted">{r.short}</td>
                   </tr>
