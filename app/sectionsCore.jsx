@@ -470,7 +470,7 @@ function ResumenAsset({ result, regime, palette }) {
       {/* decisión global: Índice Bambú + matrices diagnóstico/decisión */}
       <div style={{ marginTop: 16 }}>
         {window.DiagMatrices
-          ? <window.DiagMatrices type={a.type} last={a.values} palette={palette} />
+          ? <window.DiagMatrices type={a.type} last={a.values} palette={palette} rankSTH={sthPos} rankLTH={lthPos} />
           : null}
       </div>
 

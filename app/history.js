@@ -100,7 +100,7 @@
     if (init) Object.assign(init.values, R.latest);
     raw[type] = R.lastDays(DAYS);
   });
-  try { window.BambuDataDate = "2026-08-31"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
+  try { window.BambuDataDate = "2026-09-01"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
   function realRows(days, type) { const R = realOf(type || "BTC"); return R ? R.lastDays(days) : (raw[type || "BTC"] || raw.BTC); }
 
   /* ----- composite diario derivado del motor (con caché: recalcularlo en cada

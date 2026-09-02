@@ -84,9 +84,9 @@ function stateLabel(idx, type, hz) {
   if (idx == null) return "—";
   if (type && H && H.bandsFor) {
     const temp = Math.max(0, Math.min(100, 50 - idx * 50));
-    return H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands).label;
+    return H.bandOf(H.zoneOf(temp, type, hz || "lth", 27).rank, H.FIXED_BANDS).label;
   }
-  const s = stateOf(idx);
+  const s = stateOf(idx == null ? null : Math.max(0, Math.min(100, 50 - idx * 50)));
   return s == null ? "—" : STATE_LABELS[s];
 }
 // [LTH][STH]
@@ -127,25 +127,34 @@ const DECISION = [
 /* Estado (0 fr\u00edo / 1 neutral / 2 caliente) derivado de las MISMAS bandas por
    percentiles que el resto de Bambu: el \u00edndice se traduce a temperatura y se
    busca su banda hist\u00f3rica, en vez de usar cortes fijos \u00b10.15. */
-function stateOf(idx, type, hz) {
-  if (idx == null) return null;
+/* Recibe el RANK publicado (0-100) del horizonte, el mismo que imprime el resto
+   de la página, y solo lo bandea. El índice de heat-metrics no es una
+   temperatura: derivarla de él daba una escala inventada sin relación con la
+   lectura del activo, y la matriz marcaba una celda que contradecía al KPI. */
+function stateOf(rank) {
+  if (rank == null) return null;
   const H = window.BambuHistory;
-  if (type && H && H.bandsFor) {
-    const temp = Math.max(0, Math.min(100, 50 - idx * 50));
-    const id = H.bandOf(temp, H.bandsFor(type, hz || "lth", 27).bands).id;
+  if (H && H.bandOf && H.FIXED_BANDS) {
+    const id = H.bandOf(rank, H.FIXED_BANDS).id;
     if (id === "fria" || id === "temprana") return 0;
     if (id === "calida" || id === "caliente") return 2;
     return 1;
   }
-  return idx >= 0.15 ? 0 : idx <= -0.15 ? 2 : 1;
+  return rank < 40 ? 0 : rank > 60 ? 2 : 1;
 }
 
-function DiagMatrices({ type, last, palette }) {
+function DiagMatrices({ type, last, palette, rankSTH, rankLTH }) {
+  const H = window.BambuHistory;
   const sthMetrics = buildHeatMetrics(type, "STH", last);
   const lthMetrics = buildHeatMetrics(type, "LTH", last);
   const sthIdx = indexOfMetrics(last, sthMetrics);
   const lthIdx = indexOfMetrics(last, lthMetrics);
-  const sSt = stateOf(sthIdx, type, "sth"), lSt = stateOf(lthIdx, type, "lth");
+  /* Los ranks vienen de quien los imprime; si no llegan, se derivan de las
+     temperaturas REALES del composite, nunca del índice de heat-metrics. */
+  const res = (rankSTH == null || rankLTH == null) ? E.computeAsset({ type, values: last }, { k: 27 }) : null;
+  const rkS = rankSTH != null ? rankSTH : H.zoneOf(res.sth.temp, type, "sth", 27).rank;
+  const rkL = rankLTH != null ? rankLTH : H.zoneOf(res.lth.temp, type, "lth", 27).rank;
+  const sSt = stateOf(rkS), lSt = stateOf(rkL);
   const diag = (lSt != null && sSt != null) ? DIAG[lSt][sSt] : null;
   const dec = (lSt != null && sSt != null) ? DECISION[lSt][sSt] : null;
   const sthCol = heatScore(sthIdx), lthCol = heatScore(lthIdx);
