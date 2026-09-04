@@ -14,6 +14,11 @@ function dataDate() {
   const iso = window.BambuDataDate || (R ? R.latestIso : "2026-06-28");
   return new Date(iso + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
+function assetDate(type) {
+  const R = window.BambuRealData && window.BambuRealData[type];
+  if (!R) return "";
+  return new Date(R.latestIso + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "UTC" });
+}
 function dataTime() { return window.BambuDataTime || "13:00 UTC"; }
 
 /* Aviso permanente: cadencia de actualización */
@@ -103,17 +108,19 @@ function ScoreChip({ score }) {
 }
 
 /* desglose completo de un horizonte: composite + grupos + cada métrica con su valor y score */
-function MetricBreakdown({ hr, label }) {
-  const col = E.tempColor(hr.temp, PAL);
+function MetricBreakdown({ hr, label, tkType, hzKey }) {
+  const HB = window.BambuHistory;
+  const mPos = (HB && HB.zoneOf && tkType) ? HB.zoneOf(hr.temp, tkType, hzKey || "lth", 27).rank : hr.temp;
+  const col = E.tempColor(mPos, PAL);
   return (
     <div style={{ background: "var(--surface-3)", borderRadius: 12, padding: "14px 15px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
         <span style={{ fontWeight: 700, fontSize: 13.5 }}>{label}</span>
         <span style={{ flex: 1 }} />
         <span className="num" style={{ fontSize: 12, color: "var(--ink-2)" }}>Convicción {E.fmt.signed(hr.composite)}</span>
-        <span className="num" style={{ fontSize: 13, fontWeight: 700, color: col }}>{Math.round(hr.temp)}°</span>
+        <span className="num" style={{ fontSize: 13, fontWeight: 700, color: col }}>{Math.round(mPos)} <span style={{ fontWeight: 500, color: "var(--ink-3)", fontSize: 11 }}>/100</span></span>
       </div>
-      <div style={{ marginBottom: 10 }}><TempBar temp={hr.temp} height={7} /></div>
+      <div style={{ marginBottom: 10 }}><TempBar temp={mPos} height={7} /></div>
       {hr.groups.map(g => (
         <div key={g.id} style={{ marginTop: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
@@ -137,6 +144,7 @@ function MetricBreakdown({ hr, label }) {
 
 /* ---------- iconos ---------- */
 const PICONS = {
+  preguntas: "M12 17h.01M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1.1-1.3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
   resumen: "M3 13h4l2 6 4-14 2 8h6", plan: "M3 7h18v12H3zM3 11h18M8 15h4",
   dca: "M12 3v4M12 17v4M5 12h14M8 8l-3 4 3 4M16 8l3 4-3 4",
   heatmap: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z", macro: "M12 3v18M5 8l7-5 7 5M5 12h14",
@@ -345,7 +353,7 @@ function App() {
                   <tr key={tk + i}>
                     <td style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", fontWeight: 600 }}>{i === 0 ? tk : ""}</td>
                     <td style={{ padding: "9px 12px", borderTop: "1px solid var(--border)" }}>{row[0]}</td>
-                    <td className="num" style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", textAlign: "right", color: E.tempColor(row[1], PAL), fontWeight: 700 }}>{Math.round(row[1])}°</td>
+                    <td className="num" style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", textAlign: "right", color: E.tempColor(row[1], PAL), fontWeight: 700 }}>{Math.round(row[1])}</td>
                     <td className="num" style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", textAlign: "right" }}>{E.fmt.signed(row[2])}</td>
                     <td style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", textAlign: "right", fontSize: 11 }}>{(DD.SIGNALS[row[3]] || {}).short || row[3]}</td>
                     <td className="num" style={{ padding: "9px 12px", borderTop: "1px solid var(--border)", textAlign: "right", fontWeight: 700 }}>{Math.round(row[4] * 100)}%</td>
@@ -362,22 +370,37 @@ function App() {
   );
 
   /* ---- plan de salida persistente ---- */
+  /* Normativa por activo: cada cripto tiene su propio techo plausible de ciclo.
+     ETH no puede proyectarse con los mismos múltiplos ni con precios de BTC. */
+  const EXIT_RULES = {
+    BTC: { seed: [{ mult: 1.5, pct: 20 }, { mult: 2.2, pct: 30 }, { mult: 3.0, pct: 30 }], maxMult: 3.2,
+           nota: "el techo plausible de este ciclo va de 2,2× a 3× el precio actual." },
+    ETH: { seed: [{ mult: 1.4, pct: 20 }, { mult: 1.9, pct: 30 }, { mult: 2.5, pct: 30 }], maxMult: 2.8,
+           nota: "se mide en su propia escala, nunca con precios de BTC. Su techo plausible va de 1,9× a 2,5× el precio actual." },
+  };
   const [exitPlan, setExitPlan] = React.useState(() => {
-    try { const s = localStorage.getItem("bpro_exit_v1"); if (s) return JSON.parse(s); } catch (e) {}
+    try { const s = localStorage.getItem("bpro_exit_v2"); if (s) return JSON.parse(s); } catch (e) {}
     const seed = {};
-    [btc, eth].filter(Boolean).forEach(r => { const p = r.vals.price; seed[r.asset.type] = [
-      { mult: 1.5, pct: 20 }, { mult: 2.2, pct: 30 }, { mult: 3.0, pct: 30 },
-    ].map(x => ({ price: Math.round(p * x.mult), pct: x.pct, done: false })); });
+    [btc, eth].filter(Boolean).forEach(r => { const p = r.vals.price, t = r.asset.type;
+      seed[t] = (EXIT_RULES[t] || EXIT_RULES.BTC).seed.map(x => ({ price: Math.round(p * x.mult), pct: x.pct, done: false })); });
     return seed;
   });
-  React.useEffect(() => { try { localStorage.setItem("bpro_exit_v1", JSON.stringify(exitPlan)); } catch (e) {} }, [exitPlan]);
+  React.useEffect(() => { try { localStorage.setItem("bpro_exit_v2", JSON.stringify(exitPlan)); } catch (e) {} }, [exitPlan]);
 
   const pageSalida = (
     <div>
-      <Sub>Define hoy, con la cabeza fría, a qué precios venderás parte de tu posición. El plan queda <b>guardado</b> y Bambu lo vigila: cuando el precio alcance un nivel o el ciclo entre en zona de asegurar (más de 75° de largo plazo), aquí lo verás marcado. Vender por tramos evita la trampa de “esperar un poco más”.</Sub>
+      <Sub>Define hoy, con la cabeza fría, a qué precios venderás parte de tu posición. El plan queda <b>guardado</b> y Bambu lo vigila: cuando el precio alcance un nivel o el ciclo entre en zona de distribución (80 de 100 de largo plazo), aquí lo verás marcado. Vender por tramos evita la trampa de “esperar un poco más”.</Sub>
       {[btc, eth].filter(Boolean).map(r => {
         const tk2 = r.asset.type, p = r.vals.price, lvls = exitPlan[tk2] || [];
         const lthT = r.lth.temp;
+        /* el umbral se compara en la escala publicada: el corte de DISTRIBUCIÓN es 80 */
+        const lthPos = (window.BambuHistory && window.BambuHistory.zoneOf) ? window.BambuHistory.zoneOf(lthT, tk2, "lth", 27).rank : lthT;
+        const rule = EXIT_RULES[tk2] || EXIT_RULES.BTC;
+        const techo = Math.round(p * rule.maxMult);
+        /* valor medio de salida: precio promedio ponderado por el % que vendes en cada tramo */
+        const wSum = lvls.reduce((a, x) => a + (+x.pct || 0), 0);
+        const avgExit = wSum > 0 ? lvls.reduce((a, x) => a + (+x.price || 0) * (+x.pct || 0), 0) / wSum : 0;
+        const avgMult = p ? avgExit / p : 0;
         const setL = (i, k, val) => setExitPlan(ep => { const c = { ...ep, [tk2]: ep[tk2].map((x, j) => j === i ? { ...x, [k]: val } : x) }; return c; });
         const totPct = lvls.reduce((a, x) => a + (+x.pct || 0), 0);
         return (
@@ -386,15 +409,17 @@ function App() {
               <span style={{ fontWeight: 700, fontSize: 16 }}>{r.asset.name}</span>
               <span className="num" style={{ fontSize: 12, color: "var(--ink-3)" }}>ahora {usd(p)}</span>
               <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: lthT > 75 ? "#B0402A" : "var(--ink-3)", background: lthT > 75 ? "#FBEEE9" : "var(--surface-3)", borderRadius: 100, padding: "3px 10px" }}>{lthT > 75 ? "CICLO EN ZONA DE ASEGURAR" : `ciclo en ${Math.round(lthT)}° · aún no toca`}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: lthPos > 80 ? "#B0402A" : "var(--ink-3)", background: lthPos > 80 ? "#FBEEE9" : "var(--surface-3)", borderRadius: 100, padding: "3px 10px" }}>{lthPos > 80 ? "CICLO EN ZONA DE ASEGURAR" : `ciclo en ${Math.round(lthPos)} de 100 · aún no toca`}</span>
             </div>
             {lvls.map((l, i) => {
               const prog = clamp(p / (l.price || 1) * 100, 0, 100);
               const hit = p >= (l.price || Infinity);
+              const over = (l.price || 0) > techo;
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i ? "1px solid var(--border)" : "none", opacity: l.done ? .55 : 1 }}>
                   <span style={{ fontSize: 12, color: "var(--ink-3)", width: 52 }}>Nivel {i + 1}</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ color: "var(--ink-3)", fontSize: 12 }}>$</span><input type="number" value={l.price || ""} onChange={e => setL(i, "price", parseFloat(e.target.value) || 0)} style={{ width: 86, fontFamily: "var(--mono)", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border-2)", background: "var(--card)", color: "var(--ink)" }} /></span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ color: "var(--ink-3)", fontSize: 12 }}>$</span><input type="number" value={l.price || ""} onChange={e => setL(i, "price", parseFloat(e.target.value) || 0)} style={{ width: 86, fontFamily: "var(--mono)", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: over ? "1px solid #B0402A" : "1px solid var(--border-2)", background: over ? "#FBEEE9" : "var(--card)", color: over ? "#B0402A" : "var(--ink)" }} /></span>
+                  <span className="num" style={{ fontSize: 11, color: "var(--ink-3)", width: 38 }}>{p ? (l.price / p).toFixed(1) + "×" : ""}</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><input type="number" value={l.pct || ""} onChange={e => setL(i, "pct", parseFloat(e.target.value) || 0)} style={{ width: 48, fontFamily: "var(--mono)", fontSize: 13, padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border-2)", background: "var(--card)", color: "var(--ink)" }} /><span style={{ color: "var(--ink-3)", fontSize: 12 }}>% a vender</span></span>
                   <div style={{ flex: 1, height: 8, background: "var(--surface-3)", borderRadius: 5, overflow: "hidden", minWidth: 60 }}><div style={{ width: `${prog}%`, height: "100%", background: hit ? "#B0402A" : "var(--brand)" }} /></div>
                   <span className="num" style={{ fontSize: 11.5, width: 56, textAlign: "right", color: hit ? "#B0402A" : "var(--ink-3)" }}>{hit ? "ALCANZADO" : Math.round(prog) + "%"}</span>
@@ -402,11 +427,22 @@ function App() {
                 </div>
               );
             })}
+            {/* valor medio de salida · lo que de verdad obtienes vendiendo por tramos */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", background: "var(--surface-2, #F2F6F2)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", marginTop: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)", fontWeight: 700 }}>Valor medio de salida</div>
+                <div className="num" style={{ fontSize: 22, fontWeight: 700, color: "var(--brand)" }}>{avgExit ? usd(Math.round(avgExit)) : "—"}</div>
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, flex: 1, minWidth: 220 }}>
+                Vendiendo por tramos no vendes al precio más alto, sino a este <b>promedio</b>: {avgMult ? avgMult.toFixed(1) + "×" : "—"} el precio de hoy. Es el número con el que debes hacer tus cuentas — renuncias al techo exacto a cambio de no depender de acertarlo.
+              </div>
+            </div>
             <div style={{ fontSize: 11.5, color: totPct > 100 ? "#B0402A" : "var(--ink-3)", marginTop: 8 }}>Venderás en total el <b>{totPct}%</b> de tu posición{totPct > 100 ? " — supera el 100%, ajusta los niveles" : "; el resto sigue en el núcleo"}.</div>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 6, lineHeight: 1.55 }}><b>Normativa de {tk2}:</b> {rule.nota} Techo de referencia: <span className="num">{usd(techo)}</span>{lvls.some(l => (l.price || 0) > techo) ? <span style={{ color: "#B0402A", fontWeight: 700 }}> · tienes niveles por encima del techo, en rojo</span> : null}</div>
           </div>
         );
       })}
-      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.6 }}>Regla del modelo: además de tus niveles de precio, empieza a asegurar cuando la lectura de largo plazo supere los 75°, aunque el precio no haya llegado. Tu plan se guarda en este dispositivo. No es asesoramiento financiero.</div>
+      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.6 }}>Regla del modelo: además de tus niveles de precio, empieza a asegurar cuando la lectura de largo plazo entre en zona de distribución (80 de 100), aunque el precio no haya llegado. <b>Cada activo tiene su propia escala</b>: los niveles de ETH se calculan sobre el precio de ETH y su techo histórico de ciclo, nunca copiando los de BTC. Tu plan se guarda en este dispositivo. No es asesoramiento financiero.</div>
     </div>
   );
 
@@ -427,7 +463,7 @@ function App() {
         </div>
       );
       case "salida": return pageSalida;
-      case "resumen": return <SectionResumen results={results} regime={regime} palette={PAL} />;
+      case "resumen": return <SectionResumen results={results} regime={regime} palette={PAL} onGo={setPage} />;
       case "heatmap": return <SectionHeatmap results={results} regime={regime} palette={PAL} k={27} />;
       case "ciclo": return <SectionCiclo palette={PAL} />;
       case "onchain": return <SectionOnchain results={results} palette={PAL} k={27} />;
@@ -496,8 +532,8 @@ function App() {
           <div className="stb-chip"><span className="k">Reporte</span><span className="v num">{date} · {dataTime()}</span></div>
           <span style={{ flex: 1 }} />
           <div className="stb-chip stb-hide"><span className="k">Régimen</span><span className="v" style={{ color: "var(--brand)" }}>{regime}</span></div>
-          <div className="stb-chip stb-hide"><span className="k">BTC</span><span className="v num">{usd(btc.vals.price)}</span></div>
-          {eth && <div className="stb-chip stb-hide"><span className="k">ETH</span><span className="v num">{usd(eth.vals.price)}</span></div>}
+          <div className="stb-chip stb-hide"><span className="k">BTC · {assetDate("BTC")}</span><span className="v num">{usd(btc.vals.price)}</span></div>
+          {eth && <div className="stb-chip stb-hide"><span className="k">ETH · {assetDate("ETH")}</span><span className="v num">{usd(eth.vals.price)}</span></div>}
         </header>
         <div className="scontent">
           <div className="spage" key={page}><UpdateNotice />{renderPage()}</div>

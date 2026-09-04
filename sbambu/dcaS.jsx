@@ -24,7 +24,13 @@ function simDCA(type, months, B, mode) {
   const step = Math.max(1, Math.floor(rows.length / nWeeks));
   const pts = []; for (let i = 0; i < rows.length; i += step) pts.push(rows[i]);
   const price = p => p.values.price;
-  const temps = p => { const res = EG.computeAsset({ type, values: p.values }, { k: 27 }); return { s: res.sth.temp, l: res.lth.temp }; };
+  /* la lectura va en la escala publicada 0-100, la misma del resto de la suite */
+  const HZ = window.BambuHistory;
+  const temps = p => {
+    const res = EG.computeAsset({ type, values: p.values }, { k: 27 });
+    if (HZ && HZ.zoneOf) return { s: HZ.zoneOf(res.sth.temp, type, "sth", 27).rank, l: HZ.zoneOf(res.lth.temp, type, "lth", 27).rank };
+    return { s: res.sth.temp, l: res.lth.temp };
+  };
   const save = B / 4.33;               // ahorro por semana
   let units = 0, invested = 0, cash = 0; const series = [];
   const N = pts.length;
@@ -36,8 +42,8 @@ function simDCA(type, months, B, mode) {
     else if (mode === "mensual") { if (i % 4 === 3 || lastOne) { units += cash / pr; cash = 0; } }
     else {
       const t = temps(p);
-      /* plan de salida: sobre 75° LTH asegura por tramos a USD (regla del Plan de salida) */
-      if (t.l > 75 && units > 0) { const f = Math.min(0.5, 0.15 + (t.l - 75) / 40); cash += units * f * pr; units -= units * f; }
+      /* plan de salida: al entrar el ciclo en zona de DISTRIBUCIÓN (80 de 100) asegura por tramos a USD */
+      if (t.l > 80 && units > 0) { const f = Math.min(0.5, 0.15 + (t.l - 80) / 20); cash += units * f * pr; units -= units * f; }
       /* muy frío: coloca todo lo ahorrado de inmediato */
       else if (t.s < 35) { units += cash / pr; cash = 0; }
       /* frío: coloca cuando hay al menos mes y medio ahorrado (mejor precio medio que el goteo) */
@@ -99,7 +105,7 @@ function DcaPlan({ results, pro }) {
   const B = cfg.monthly || 0;
   const months = cfg.horizon || 24;
   const per2 = { BTC: cfg.weight / 100, ETH: (100 - cfg.weight) / 100 };
-  const splitTxt = freq === "semanal" ? `4 aportes de ${DE.fmt.usd(B / 4)} a la semana` : freq === "quincenal" ? `2 aportes de ${DE.fmt.usd(B / 2)} cada quincena` : freq === "mensual" ? `1 aporte de ${DE.fmt.usd(B)} al mes` : `ahorras hasta ${DE.fmt.usd(B)}/mes, colocas todo lo ahorrado cuando el STH marca acumulación y aseguras a USD por tramos cuando el ciclo (LTH) supera 75° — igual que tu Plan de salida — para recomprar más abajo`;
+  const splitTxt = freq === "semanal" ? `4 aportes de ${DE.fmt.usd(B / 4)} a la semana` : freq === "quincenal" ? `2 aportes de ${DE.fmt.usd(B / 2)} cada quincena` : freq === "mensual" ? `1 aporte de ${DE.fmt.usd(B)} al mes` : `ahorras hasta ${DE.fmt.usd(B)}/mes, colocas todo lo ahorrado cuando el STH marca acumulación y aseguras a USD por tramos cuando el ciclo (LTH) supera 80 de 100 — igual que tu Plan de salida — para recomprar más abajo`;
 
   const fld = { fontFamily: "var(--mono)", fontSize: 15, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border-2)", background: "var(--card)", color: "var(--ink)", width: "100%" };
   const seg = on => ({ flex: 1, cursor: "pointer", fontFamily: "var(--sans)", fontWeight: 600, fontSize: 12.5, padding: "9px 4px", borderRadius: 9, border: on ? "1.5px solid var(--brand)" : "1.5px solid var(--border-2)", background: on ? "var(--brand-soft)" : "var(--card)", color: on ? "var(--brand-ink)" : "var(--ink-3)" });
@@ -127,7 +133,7 @@ function DcaPlan({ results, pro }) {
       <div style={{ background: "var(--card)", borderRadius: 14, boxShadow: "var(--shadow)", padding: "15px 17px", marginBottom: 10, borderLeft: `4px solid ${col}` }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>{r.asset.name}</span>
-          <span style={{ fontSize: 12, color: "var(--ink-3)" }}>aporte {DE.fmt.usd(aporte)}/mes · {r.asset.ticker} {Math.round(t)}°</span>
+          <span style={{ fontSize: 12, color: "var(--ink-3)" }}>aporte {DE.fmt.usd(aporte)}/mes · {r.asset.ticker} {Math.round(t)} de 100</span>
           <span style={{ flex: 1 }} />
           <span style={{ fontSize: 11.5, fontWeight: 700, color: dToneCol[tone], background: dToneBg[tone], borderRadius: 100, padding: "3px 10px" }}>{tone === "acc" ? "COMPRAR" : tone === "dist" ? "ESPERAR" : "NORMAL"}</span>
         </div>
@@ -261,7 +267,7 @@ function DcaPlan({ results, pro }) {
         </div>
       ); })()}
 
-      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 12 }}>Nunca se invierte más que tu presupuesto mensual. El reparto inteligente <b>ahorra en USD</b>, coloca todo lo acumulado cuando el <b>STH</b> marca acumulación y <b>asegura por tramos</b> cuando el ciclo (LTH) supera 75° — la misma regla del Plan de salida — y ese dinero asegurado <b>se reinvierte en la siguiente zona fría</b>: vender arriba y recomprar abajo es lo que compone la ventaja en dólares. No es asesoramiento financiero.</div>
+      <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 12 }}>Nunca se invierte más que tu presupuesto mensual. El reparto inteligente <b>ahorra en USD</b>, coloca todo lo acumulado cuando el <b>STH</b> marca acumulación y <b>asegura por tramos</b> cuando el ciclo (LTH) supera 80 de 100 — la misma regla del Plan de salida — y ese dinero asegurado <b>se reinvierte en la siguiente zona fría</b>: vender arriba y recomprar abajo es lo que compone la ventaja en dólares. No es asesoramiento financiero.</div>
     </div>
   );
 }
@@ -289,7 +295,7 @@ function BacktestEvidence({ rowsAsset }) {
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", background: "rgba(255,255,255,.14)", borderRadius: 100, padding: "3px 10px" }}>EVIDENCIA HISTÓRICA</span>
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.6, color: "#C2D2C6", marginTop: 8 }}>
-        El DCA inteligente no es una opinión: aplica automáticamente lo que el backtest demostró en los puntos de inflexión reales desde 2013 — <b style={{ color: "#fff" }}>comprar cuando el modelo marcó acumulación</b> y <b style={{ color: "#fff" }}>asegurar a USD cuando marcó distribución</b> (ciclo sobre 75°, la regla del Plan de salida).
+        El DCA inteligente no es una opinión: aplica automáticamente lo que el backtest demostró en los puntos de inflexión reales desde 2013 — <b style={{ color: "#fff" }}>comprar cuando el modelo marcó acumulación</b> y <b style={{ color: "#fff" }}>asegurar a USD cuando marcó distribución</b> (ciclo sobre 80 de 100, la regla del Plan de salida).
       </div>
       <div style={{ display: "flex", gap: 22, marginTop: 12, flexWrap: "wrap" }}>
         {stats.map(s => (
