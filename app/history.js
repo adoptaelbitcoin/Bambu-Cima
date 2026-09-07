@@ -100,7 +100,7 @@
     if (init) Object.assign(init.values, R.latest);
     raw[type] = R.lastDays(DAYS);
   });
-  try { window.BambuDataDate = "2026-09-04"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
+  try { window.BambuDataDate = "2026-09-07"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
   function realRows(days, type) { const R = realOf(type || "BTC"); return R ? R.lastDays(days) : (raw[type || "BTC"] || raw.BTC); }
 
   /* ----- composite diario derivado del motor (con caché: recalcularlo en cada
@@ -111,7 +111,7 @@
     if (_dcCache[ck]) return _dcCache[ck];
     const E = window.BambuEngine;
     return _dcCache[ck] = raw[type].map(row => {
-      const res = E.computeAsset({ type, values: row.values }, { k });
+      const res = E.computeAsset({ type, values: window.BambuData.valuesFor(type, row.values) }, { k });
       return { label: row.label, iso: row.iso, date: row.date,
                sth: res.sth.composite, lth: res.lth.composite,
                sthTemp: res.sth.temp, lthTemp: res.lth.temp };
@@ -156,7 +156,7 @@
     let rows = realOf(type) ? realOf(type).lastDays(days) : raw[type];
     rows = sample(rows, maxPoints || 380);
     return _rcCache[ck] = rows.map(row => {
-      const res = E.computeAsset({ type, values: row.values }, { k });
+      const res = E.computeAsset({ type, values: window.BambuData.valuesFor(type, row.values) }, { k });
       return { label: row.label, iso: row.iso,
                sth: res.sth.composite, lth: res.lth.composite,
                sthTemp: res.sth.temp, lthTemp: res.lth.temp,
@@ -192,16 +192,64 @@
     const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p);
     return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo);
   }
+  /* Inicio de cada ciclo de halving. El rango del composite se ha estrechado
+     ciclo a ciclo (BTC-LTH: 25-76 en 2013, 31-62 hoy), así que medir contra la
+     historia plana comprime el ciclo vigente hacia el centro y hace casi
+     inalcanzables los extremos. Solución: cada ciclo aporta su distribución
+     normalizada a SU propio rango, y los ciclos pesan como en los escenarios
+     (el vigente 1, cada anterior un tercio). */
+  const CYCLE_ORIGINS = ["2012-11-28", "2016-07-09", "2020-05-11", "2024-04-20"];
+  /* Rango de referencia del ciclo vigente, congelado en la calibración del
+     4-sep-2026: evita que la escala se recalibre sola cada día mientras el
+     ciclo sigue abierto. Se revisa al cerrar el ciclo. */
+  const CYCLE_ANCHOR = {
+    BTC: { lth: [28.0, 64.0], sth: [30.0, 62.0] },
+    ETH: { lth: [28.0, 64.0], sth: [30.0, 62.0] },
+  };
+  function cycleIndexOf(iso) {
+    let c = 0;
+    for (let i = 0; i < CYCLE_ORIGINS.length; i++) if (iso >= CYCLE_ORIGINS[i]) c = i;
+    return c;
+  }
   function bandsFor(type, hz, k) {
     k = k || 27;
     const key = type + hz + k;
     if (_bandCache[key]) return _bandCache[key];
-    let vals = [];
+    let vals = [], groups = null;
     try {
       const all = rangeComposites(type, k, 99999, 2000);
+      const nowC = cycleIndexOf(window.BambuDataDate || (window.BambuRealData[type] || {}).latestIso || "");
+      const byC = {};
+      all.forEach(d => {
+        const t = hz === "lth" ? d.lthTemp : d.sthTemp;
+        if (t == null) return;
+        const c = cycleIndexOf(d.iso || d.date || "");
+        (byC[c] = byC[c] || []).push(t);
+      });
+      const gs = [];
+      Object.keys(byC).forEach(cs => {
+        const c = +cs, arr = byC[c].slice().sort((x, y) => x - y);
+        if (arr.length < 40) return;
+        /* rango propio del ciclo: los percentiles 1 y 99 evitan que un día
+           aislado defina los extremos de todo el ciclo */
+        let lo = quantile(arr, 0.01), hi = quantile(arr, 0.99);
+        /* El ciclo vigente está a medio recorrer, así que su rango observado
+           crecería con cada extremo nuevo y eso reescribiría todas las lecturas
+           pasadas. Se ancla al rango de referencia (media de los ciclos
+           cerrados, ajustada por su estrechamiento) y solo se ensancha si el
+           mercado lo desborda de verdad. */
+        if (c === nowC && CYCLE_ANCHOR[type] && CYCLE_ANCHOR[type][hz]) {
+          const a = CYCLE_ANCHOR[type][hz];
+          lo = Math.min(lo, a[0]); hi = Math.max(hi, a[1]);
+        }
+        if (!(hi > lo)) return;
+        gs.push({ cycle: c, vals: arr, lo, hi, w: Math.pow(1 / 3, Math.max(0, nowC - c)), anchored: c === nowC });
+      });
+      if (gs.length) groups = gs;
       vals = all.map(d => hz === "lth" ? d.lthTemp : d.sthTemp).filter(v => v != null).sort((x, y) => x - y);
     } catch (e) {}
-    return _bandCache[key] = { bands: FIXED_BANDS, lo: 0, hi: 100, vals: vals.length >= 60 ? vals : null };
+    return _bandCache[key] = { bands: FIXED_BANDS, lo: 0, hi: 100, groups,
+                               vals: vals.length >= 60 ? vals : null };
   }
 
   /* posición percentil (0-100) de una temperatura en la historia del activo:
@@ -209,7 +257,25 @@
      "caliente" signifiquen extremo histórico y no un corte arbitrario. */
   function tempRank(temp, type, hz, k) {
     const b = bandsFor(type, hz, k);
-    if (!b.vals || temp == null) return temp;
+    if (temp == null) return temp;
+    /* Método B · cada ciclo aporta su percentil medido en su propio rango, y
+       las aportaciones se promedian con el peso del ciclo. Así el ciclo vigente
+       define la escala y los anteriores solo la matizan. */
+    if (b.groups && b.groups.length) {
+      let acc = 0, wsum = 0;
+      for (const g of b.groups) {
+        /* posición relativa dentro del rango del ciclo vigente, trasladada al
+           rango del ciclo histórico que se está consultando */
+        const cur = b.groups[b.groups.length - 1];
+        const rel = (temp - cur.lo) / (cur.hi - cur.lo);
+        const equiv = g.lo + rel * (g.hi - g.lo);
+        const v = g.vals; let lo = 0, hi = v.length;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < equiv) lo = m + 1; else hi = m; }
+        acc += ((lo / v.length) * 100) * g.w; wsum += g.w;
+      }
+      if (wsum > 0) return Math.max(0, Math.min(100, acc / wsum));
+    }
+    if (!b.vals) return temp;
     const v = b.vals; let lo = 0, hi = v.length;
     while (lo < hi) { const m = (lo + hi) >> 1; if (v[m] < temp) lo = m + 1; else hi = m; }
     return Math.max(0, Math.min(100, (lo / v.length) * 100));
@@ -283,7 +349,7 @@
     const sigRank = c => {
       const t = 50 - c * 27;
       const rk = zoneOf(t, type, hzKey, k).rank;
-      return { sig: E.signalFor((50 - rk) / 27), rank: rk };
+      return { sig: E.signalForRank(rk), rank: rk };
     };
     const out = [];
     (BT_DATES[type] || BT_DATES.BTC).forEach(d => {
@@ -296,7 +362,7 @@
       }
       if (i < 0) return;
       const vals = R.rowAt(i);
-      const res = E.computeAsset({ type, values: vals }, { k });
+      const res = E.computeAsset({ type, values: window.BambuData.valuesFor(type, vals) }, { k });
       const comp = compOf(res);
       const fwd = i + 90 < R.count ? R.price(i + 90) : null;
       const mov = fwd ? (fwd / R.price(i) - 1) * 100 : null;
@@ -308,7 +374,7 @@
     });
     // hoy
     const lv = R.latest;
-    const lr = E.computeAsset({ type, values: lv }, { k });
+    const lr = E.computeAsset({ type, values: window.BambuData.valuesFor(type, lv) }, { k });
     const lc = compOf(lr);
     const lsr = sigRank(lc);
     out.push({ date: "Hoy " + R.latestIso, iso: R.latestIso, evt: "Lectura actual",
@@ -330,7 +396,7 @@
   window.BambuHistory = {
     DAYS, raw, dailyComposites, SNAPSHOTS, metricCatalog,
     REAL, realOf, isReal: t => !!realOf(t), realRows, rangeComposites, realBacktest, realStats, sample,
-    bandsFor, tempRank, bandOf, quantile, zoneOf, FIXED_BANDS,
+    bandsFor, tempRank, bandOf, quantile, zoneOf, FIXED_BANDS, cycleIndexOf, CYCLE_ORIGINS, CYCLE_ANCHOR,
     RANGES: [{ d: 90, l: "90 días" }, { d: 365, l: "1 año" }, { d: 730, l: "2 años" }, { d: 1460, l: "4 años" }, { d: 999999, l: "Máximo" }],
     valueSeries(type, key) {
       return (raw[type] || []).map(r => ({ label: r.label, iso: r.iso, value: m_value(type, key, r.values) }));

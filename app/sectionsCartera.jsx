@@ -115,7 +115,11 @@ function SectionCartera({ results, regime, palette, portfolio, setPortfolio }) {
     if (/COMPRA/.test(sig) || temp < 40) return { t: "Mal momento para SHORT", col: E.tempColor(85, palette), tag: "Desfavorable" };
     return { t: "SHORT selectivo · espera confirmación", col: E.tempColor(48, palette), tag: "Neutral" };
   };
-  const mv = momentVerdict(hz.signal, hz.temp);
+  /* Veredicto, señal y cifra desde el rank publicado: con la señal cruda esta
+     tarjeta decía "espera confirmación" mientras la zona marcaba acumulación. */
+  const hzRank = window.BambuHistory.zoneOf(hz.temp, planRes.asset.type, planHz === "STH" ? "sth" : "lth").rank;
+  const hzSig = E.signalForRank(hzRank);
+  const mv = momentVerdict(hzSig, hzRank);
   const projOf = (hr, months) => { const md = cyc.at(months); return isLong ? md : -md; };
 
   // matriz de correlación · ventana seleccionable (>3 meses por defecto)
@@ -202,21 +206,22 @@ function SectionCartera({ results, regime, palette, portfolio, setPortfolio }) {
             <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em" }}>¿Buen momento? · {planTk} {planHz} · {isLong ? "LONG" : "SHORT"}</div>
             <div style={{ fontSize: 19, fontWeight: 700, color: mv.col, lineHeight: 1.15, marginTop: 5 }}>{mv.t}</div>
             <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
-              <span className="tiny"><span className="muted">Señal</span> <SignalPill signal={hz.signal} /></span>
-              <span className="tiny"><span className="muted">Temp.</span> <strong className="num" style={{ color: mv.col }}>{hz.temp.toFixed(0)}°</strong></span>
+              <span className="tiny"><span className="muted">Señal</span> <SignalPill signal={hzSig} /></span>
+              <span className="tiny"><span className="muted">Lectura</span> <strong className="num" style={{ color: mv.col }}>{hzRank.toFixed(0)} de 100</strong></span>
               <span className="tiny"><span className="muted">Zona</span> <strong>{window.BambuHistory.zoneOf(hz.temp, planRes.asset.type, planHz === "STH" ? "sth" : "lth").label}</strong></span>
               <span className="tiny"><span className="muted">Régimen</span> <strong>×{regMult.toFixed(2)}</strong></span>
             </div>
           </div>
           {/* diferencia de proyección STH vs LTH (resultado según dirección) */}
           <div style={{ display: "flex", gap: 10 }}>
-            {[["STH", planRes.sth, 3, "3 meses"], ["LTH", planRes.lth, 12, "12 meses"]].map(([lab, hr, win, plazo]) => {
+            {[["STH", planRes.sth, 3, "3 meses", "sth"], ["LTH", planRes.lth, 12, "12 meses", "lth"]].map(([lab, hr, win, plazo, hk]) => {
               const m = projOf(hr, win); const on = planHz === lab;
-              const c = E.tempColor(hr.temp, palette);
+              const rk = window.BambuHistory.zoneOf(hr.temp, planRes.asset.type, hk).rank;
+              const c = E.tempColor(rk, palette);
               return (
                 <div key={lab} style={{ flex: 1, border: on ? `2px solid ${c}` : "1px solid var(--border)", borderRadius: 10, padding: "11px 13px", background: on ? mixSoft(c, 0.88) : "var(--surface)" }}>
                   <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".05em" }}>{lab}</div>
-                  <div className="num" style={{ fontSize: 18, fontWeight: 700, color: c, marginTop: 3 }}>{hr.temp.toFixed(0)}°</div>
+                  <div className="num" style={{ fontSize: 18, fontWeight: 700, color: c, marginTop: 3 }}>{rk.toFixed(0)} <span style={{ fontSize: 11, color: "var(--ink-3)" }}>/100</span></div>
                   <div className="tiny" style={{ marginTop: 4 }}>{isLong ? "Long" : "Short"} a {plazo}: <strong className="num" style={{ color: m >= 0 ? "var(--brand)" : "#A83C26" }}>{m >= 0 ? "+" : ""}{m.toFixed(0)}%</strong></div>
                 </div>
               );

@@ -72,6 +72,39 @@
   }
 
   /* ---------- composite → señal · 7 niveles ---------- */
+  /* Señal desde la lectura publicada (0-100). Los cortes coinciden con las
+     bandas que se muestran al usuario, así que la píldora, el veredicto y el
+     pie de la tarjeta nunca pueden contradecirse. */
+  function signalForRank(rank) {
+    if (rank == null) return "NEUTRAL";
+    /* Se redondea con el MISMO criterio que zoneOf, que etiqueta sobre el
+       entero: sin esto, en [x.5, x+1) de cada corte la zona saltaba de banda
+       y la señal no, y la tarjeta se contradecía consigo misma. */
+    const r = Math.round(rank);
+    if (r < 10) return "COMPRA FUERTE";
+    if (r < 20) return "COMPRA NATURAL";
+    if (r < 40) return "COMPRA TEMPRANA";
+    if (r < 60) return "NEUTRAL";
+    if (r < 80) return "REDUCIR";
+    if (r < 90) return "VENTA";
+    return "VENTA FUERTE";
+  }
+  /* Veredicto en palabras, agrupando las 7 señales. Es la fuente única para
+     el Historial, el chrome y cualquier vista que resuma en 3 etiquetas: cada
+     módulo con su propia escalera de cortes acababa contradiciendo al Resumen. */
+  const _VERDICT = {
+    "COMPRA FUERTE":  { w: "ACUMULAR",           short: "Comprar con convicción",  plain: "barato",  kind: "acc" },
+    "COMPRA NATURAL": { w: "ACUMULAR",           short: "Comprar en tramos",       plain: "barato",  kind: "acc" },
+    "COMPRA TEMPRANA":{ w: "ACUMULAR",           short: "Empezar a comprar",       plain: "barato",  kind: "acc" },
+    "NEUTRAL":        { w: "MANTENER",           short: "Sin ventaja clara",       plain: "neutral", kind: "neu" },
+    "REDUCIR":        { w: "REDUCIR/DISTRIBUIR", short: "Asegurar parte",          plain: "caro",    kind: "dist" },
+    "VENTA":          { w: "REDUCIR/DISTRIBUIR", short: "Repartir salidas",        plain: "caro",    kind: "dist" },
+    "VENTA FUERTE":   { w: "REDUCIR/DISTRIBUIR", short: "Postura defensiva",       plain: "caro",    kind: "dist" },
+  };
+  function verdictFromRank(rank) {
+    const sig = signalForRank(rank);
+    return { sig, ..._VERDICT[sig] };
+  }
   function signalFor(comp) {
     if (comp >= 1.5) return "COMPRA FUERTE";
     if (comp >= 0.75) return "COMPRA NATURAL";
@@ -144,7 +177,7 @@
   window.BambuEngine = {
     tempColor, readableText, mix, hexToRgb,
     metricValue, metricScore, horizonResult,
-    signalFor, temperature, zoneFor, detectRegime,
+    signalFor, signalForRank, verdictFromRank, temperature, zoneFor, detectRegime,
     computeAsset, computeAll, sizing,
     fmt: {
       num(v, d) { if (v === null || v === undefined || isNaN(v)) return "—"; return Number(v).toLocaleString("es-ES", { minimumFractionDigits: d || 0, maximumFractionDigits: d ?? 2 }); },

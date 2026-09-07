@@ -52,7 +52,7 @@ function HistTempChart({ data, palette, height = 200 }) {
   const stride = Math.ceil(n / 8);
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-      {[...DD.ZONES].map(z => {
+      {[...((window.BambuHistory && window.BambuHistory.FIXED_BANDS) || DD.ZONES)].map(z => {
         const y0 = Y(z.max), y1 = Y(z.min), col = E.tempColor(z.temp, palette);
         return <g key={z.id}>
           <rect x={pad.l} y={y0} width={w - pad.l - pad.r} height={y1 - y0} fill={mixSoft(col, 0.72)} />
@@ -113,18 +113,27 @@ function SectionHistorico({ results, regime, palette, k, snapshots, onSaveSnapsh
     return { iso: r.iso, x: xlab(r.iso), y: r.values.price, score: sc };
   });
 
-  // temperatura por horizonte en el rango
-  const tempSeries = comp.map(d => ({ x: xlab(d.iso), iso: d.iso, temp: horizon === "STH" ? d.sthTemp : d.lthTemp, price: d.price }));
+  // temperatura por horizonte en el rango, convertida a la ESCALA PUBLICADA:
+  // la sección imprimía la temperatura cruda con grados y etiquetaba con las
+  // bandas viejas, así que se contradecía consigo misma y con el Resumen.
+  const HP = window.BambuHistory;
+  const hzK = horizon === "STH" ? "sth" : "lth";
+  const rankOf = t => (HP && HP.tempRank) ? HP.tempRank(t, type, hzK, 27) : t;
+  const tempSeries = comp.map(d => ({ x: xlab(d.iso), iso: d.iso, temp: rankOf(horizon === "STH" ? d.sthTemp : d.lthTemp), price: d.price }));
   const temps = tempSeries.map(d => d.temp);
   const tMin = Math.min(...temps), tMax = Math.max(...temps), tAvg = temps.reduce((a, b) => a + b, 0) / temps.length;
+  const BANDS = (HP && HP.FIXED_BANDS) ? HP.FIXED_BANDS : DD.ZONES;
 
   // distribución por zona (días en cada zona en la ventana)
-  const zoneCount = DD.ZONES.map(z => ({ z, n: temps.filter(t => t >= z.min && (t < z.max || (z.max === 100 && t <= 100))).length }));
+  const zoneCount = BANDS.map(z => ({ z, n: temps.filter(t => t >= z.min && (t < z.max || (z.max === 100 && t <= 100))).length }));
   const totalT = temps.length || 1;
 
   // estado actual del activo/horizonte (de results)
   const curRes = results.find(r => r.asset.type === type) || results[0];
   const curHr = horizon === "STH" ? curRes.sth : curRes.lth;
+  /* lectura publicada del día, base de la cifra y de su etiqueta */
+  const curRank = rankOf(curHr.temp);
+  const curZone = HP && HP.zoneOf ? HP.zoneOf(curRank, null) : E.zoneFor(curHr.temp);
 
   const totalDays = real ? H.realOf(type).count : H.DAYS;
   const firstIso = real ? H.realOf(type).dates[0] : "—";
@@ -172,7 +181,7 @@ function SectionHistorico({ results, regime, palette, k, snapshots, onSaveSnapsh
       <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 16 }}>
         <div className="card kpi"><div className="lab">Días en base de datos</div><div className="num val">{totalDays.toLocaleString("es-ES")}</div><div className="meta muted">{type} · diario</div></div>
         <div className="card kpi"><div className="lab">Precio {type} hoy</div><div className="num val">{E.fmt.usd(rows[rows.length - 1].values.price)}</div><div className="meta muted">{lastIso}</div></div>
-        <div className="card kpi"><div className="lab">Temperatura {horizon} hoy</div><div className="num val" style={{ color: E.tempColor(curHr.temp, palette) }}>{curHr.temp.toFixed(0)}°</div><div className="meta"><span className="badge" style={{ background: mixSoft(E.tempColor(curHr.temp, palette)), color: E.tempColor(curHr.temp, palette) }}>{curHr.zone.label}</span></div></div>
+        <div className="card kpi"><div className="lab">Lectura {horizon} hoy</div><div className="num val" style={{ color: E.tempColor(curRank, palette) }}>{curRank.toFixed(0)} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>/100</span></div><div className="meta"><span className="badge" style={{ background: mixSoft(E.tempColor(curRank, palette)), color: E.tempColor(curRank, palette) }}>{curZone.label}</span></div></div>
         <div className="card kpi"><div className="lab">Lecturas guardadas</div><div className="num val" style={{ color: "var(--brand)" }}>{snapshots.length}</div><div className="meta muted">Snapshots del comité</div></div>
       </div>
 
@@ -186,18 +195,18 @@ function SectionHistorico({ results, regime, palette, k, snapshots, onSaveSnapsh
         <div className="grid" style={{ gridTemplateColumns: "300px 1fr", gap: 18, alignItems: "center" }}>
           {/* manómetro */}
           <div className="gauge-wrap">
-            <ThermoGauge temp={curHr.temp} palette={palette} size={280} />
+            <ThermoGauge temp={curRank} palette={palette} size={280} />
             <div className="gauge-read">
-              <div className="gauge-temp" style={{ color: E.tempColor(curHr.temp, palette) }}>{curHr.temp.toFixed(0)}°</div>
-              <div className="gauge-zone" style={{ color: E.tempColor(curHr.temp, palette) }}>{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").label}</div>
-              <div className="gauge-phase">{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").phase} → <strong>{window.BambuHistory.zoneOf(curHr.temp, type, horizon === "STH" ? "sth" : "lth").action}</strong></div>
+              <div className="gauge-temp" style={{ color: E.tempColor(curRank, palette) }}>{curRank.toFixed(0)} <span style={{ fontSize: "0.45em", color: "var(--ink-3)" }}>/100</span></div>
+              <div className="gauge-zone" style={{ color: E.tempColor(curRank, palette) }}>{curZone.label}</div>
+              <div className="gauge-phase">{curZone.phase} → <strong>{curZone.action}</strong></div>
             </div>
           </div>
           {/* curva con bandas */}
           <div>
             <HistTempChart data={tempSeries} palette={palette} height={210} />
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 10, fontSize: 12 }}>
-              <span className="muted">En la ventana: mín <strong className="num">{tMin.toFixed(0)}°</strong> · media <strong className="num">{tAvg.toFixed(0)}°</strong> · máx <strong className="num">{tMax.toFixed(0)}°</strong></span>
+              <span className="muted">En la ventana: mín <strong className="num">{tMin.toFixed(0)}</strong> · media <strong className="num">{tAvg.toFixed(0)}</strong> · máx <strong className="num">{tMax.toFixed(0)}</strong> de 100</span>
             </div>
             {/* distribución por zona */}
             <div style={{ marginTop: 12 }}>

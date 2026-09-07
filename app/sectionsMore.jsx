@@ -168,8 +168,8 @@ function SectionHeatmap({ results, regime, palette, k }) {
   results = allResults.filter(r => r.asset.id === active);
   const sigs = flatSignals(results);
   const mt = marketTemp(results);
-  const mz = E.zoneFor(mt);
-  const mtCol = E.tempColor(mt, palette);
+  const mz = (window.BambuHistory && window.BambuHistory.zoneOf) ? window.BambuHistory.zoneOf(marketPos(results, k), null) : E.zoneFor(mt);
+  const mtCol = E.tempColor(marketPos(results, k), palette);
 
   // matriz composite: filas horizonte, cols activos
   const assets = results.map(r => r.asset.ticker);
@@ -253,7 +253,7 @@ function SectionHeatmap({ results, regime, palette, k }) {
                   <span className="num" style={{ fontWeight: 700, color: col }}>{zz.rank.toFixed(0)}</span>
                   <span className="badge" style={{ background: mixSoft(col), color: col }}>{band.label}</span>
                   <span className="spacer" style={{ flex: 1 }} />
-                  <SignalPill signal={E.signalFor((50 - zz.rank) / 27)} />
+                  <SignalPill signal={E.signalForRank(zz.rank)} />
                 </div>
                 <TempChart data={rdata} palette={palette} bands={bands} lo={0} hi={100} height={158} />
               </div>
@@ -727,7 +727,8 @@ function BigStat({ lab, val, sub, warn }) {
 /* ============================================================
    SIZING & STOPS
    ============================================================ */
-function SectionSizing({ results, regime, palette }) {
+function SectionSizing({ results, regime, palette, k }) {
+  k = k || 27;
   const reg = DD.REGIMES[regime];
   const sigs = flatSignals(results);
   const protocolo = [
@@ -774,16 +775,19 @@ function SectionSizing({ results, regime, palette }) {
       <div className="grid" style={{ gridTemplateColumns: "1.3fr 1fr", marginTop: 16, alignItems: "start" }}>
         <Card title="Cálculo para tu convicción actual" sub={`Ajustado por régimen ${regime} (×${reg.mult.toFixed(2)})`} pad={false}>
           <table className="tbl">
-            <thead><tr><th>Activo</th><th className="c">Convicción</th><th>Señal</th><th className="r">LONG aj.</th><th className="r">HEDGE</th><th className="r">Net</th><th className="r">Stop USD</th></tr></thead>
+            <thead><tr><th>Activo</th><th className="c">Lectura /100</th><th>Señal</th><th className="r">LONG aj.</th><th className="r">HEDGE</th><th className="r">Net</th><th className="r">Stop USD</th></tr></thead>
             <tbody>
               {sigs.map((s, i) => {
                 const price = results.find(r => r.asset.ticker === s.ticker).vals.price;
-                const sz = E.sizing(s.signal, regime, price);
+                /* sizing y señal desde la lectura publicada de la fila */
+                const sRank = window.BambuHistory.zoneOf(s.temp, s.type, s.hz, k).rank;
+                const sSig = E.signalForRank(sRank);
+                const sz = E.sizing(sSig, regime, price);
                 return (
                   <tr key={i}>
                     <td style={{ fontWeight: 600 }}>{s.key}</td>
-                    <td className="c num">{E.fmt.signed(s.composite)}</td>
-                    <td><SignalPill signal={s.signal} /></td>
+                    <td className="c num">{sRank.toFixed(0)}</td>
+                    <td><SignalPill signal={sSig} /></td>
                     <td className="r num">{(sz.longAdj * 100).toFixed(2)}%</td>
                     <td className="r num muted">{(sz.hedge * 100).toFixed(2)}%</td>
                     <td className="r num" style={{ fontWeight: 600, color: sz.net >= 0 ? "var(--brand)" : "#A83C26" }}>{E.fmt.pct(sz.net * 100, 2)}</td>

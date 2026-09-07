@@ -17,7 +17,7 @@ function repSnap(type, iso) {
   if (i < 0) for (let o = 1; o < 8 && i < 0; o++) i = R.dates.indexOf(addDaysIso(iso, -o));
   if (i < 0) i = R.count - 1;
   const v = R.rowAt(i);
-  const res = E.computeAsset({ type, values: v }, { k: 27 });
+  const res = E.computeAsset({ type, values: DD.valuesFor(type, v) }, { k: 27 });
   return { i, iso: R.dates[i], v, res, price: v.price, sth: res.sth, lth: res.lth };
 }
 
@@ -75,7 +75,7 @@ function weekNarrative(w, type, sigOverride) {
   const pA = rkN(A.a), pB = rkN(A.b), dP = pB - pA;
   s += `La lectura del modelo ${Math.abs(dP) < 2 ? "se mantuvo estable" : dP > 0 ? "se calentó" : "se enfrió"} de ${pA.toFixed(0)} a ${pB.toFixed(0)} de 100 (${HN.zoneOf(pB, null).label}). `;
   const sigNow = sigOverride || A.b.lth.signal;
-  const sigPrev = sigOverride ? E.signalFor((50 - pA) / 27) : A.a.lth.signal;
+  const sigPrev = sigOverride ? E.signalForRank(pA) : A.a.lth.signal;
   if (sigNow !== sigPrev) s += `La postura del modelo cambió de ${sigPrev} a ${sigNow}. `;
   else s += `La postura del modelo se mantiene en ${sigNow}. `;
   if (moved) s += `El movimiento fundamental más relevante fue el ${moved.lab}, que pasó de ${moved.a.toFixed(moved.dec)} a ${moved.b.toFixed(moved.dec)}.`;
@@ -291,7 +291,7 @@ function weekMarkdown(w, sigs) {
   L.push("| Activo | Precio | Convicción | Lectura | Zona | Señal |");
   L.push("| --- | --- | --- | --- | --- | --- |");
   sigs.forEach(s => {
-    const z = window.BambuHistory.zoneOf(s.temp, s.type || s.ticker, s.hz || "lth");
+    const z = window.BambuHistory.zoneOf(s.temp, s.type, s.hz);
     L.push(`| ${s.key} | ${E.fmt.usd(s.price)} | ${E.fmt.signed(s.composite)} | ${z.rank.toFixed(0)}/100 | ${z.label} | ${s.signal} |`);
   });
   L.push("");
@@ -309,7 +309,7 @@ function weekMarkdown(w, sigs) {
     const HM = window.BambuHistory;
     const pM = HM && HM.zoneOf ? (HM.zoneOf(A.b.sth.temp, A.t, "sth", 27).rank + HM.zoneOf(A.b.lth.temp, A.t, "lth", 27).rank) / 2 : null;
     L.push(`### ${A.t}`);
-    L.push(weekNarrative(w, A.t, pM != null ? E.signalFor((50 - pM) / 27) : null));
+    L.push(weekNarrative(w, A.t, pM != null ? E.signalForRank(pM) : null));
     L.push("");
   });
   const les = weekLessons(w);
@@ -356,15 +356,27 @@ function weekAhead(w, cal) {
         : "Los dos horizontes van en la misma dirección, así que la semana no debería traer sorpresas de fondo."),
   });
 
+  const mL = mv && mv.lth, mS = mv && mv.sth;
   out.push({
-    q: "¿Qué hago con mi dinero esta semana?",
-    a: mv ? mv.action : zL.action,
-    lvl: mv ? mv.capPct.toFixed(1) + "%" : "—", lvlLab: "exposición sugerida · igual que el veredicto",
-    body: (mv ? `La lectura de ${tk}, combinando sus dos plazos, cierra en ${mv.pos.toFixed(0)} de 100, que sugiere tener ${mv.capPct.toFixed(1)} de cada 100 en ${tk} y el resto esperando. ` : "") +
-      (mv && mv.pos < 40 ? "Semana para aportar según calendario, sin adelantar tramos por impaciencia."
-        : mv && mv.pos > 60 ? "Semana para asegurar parte, no para aumentar: si toca vender un tramo, se vende."
+    q: "¿Qué hago con mi dinero esta semana, si invierto a ciclo?",
+    a: mL ? mL.action : zL.action,
+    lvl: mL ? mL.capPct.toFixed(1) + "%" : "—", lvlLab: "de tu portafolio en cripto",
+    body: (mL ? `La lectura de ciclo de ${tk} cierra en ${mL.pos.toFixed(0)} de 100 (${mL.zone.label.toLowerCase()}), que sugiere tener ${mL.capPct.toFixed(1)} de cada 100 en ${tk} y el resto esperando. ` : "") +
+      (mL && mL.pos < 40 ? "Semana para aportar según calendario, sin adelantar tramos por impaciencia."
+        : mL && mL.pos > 60 ? "Semana para asegurar parte, no para aumentar: si toca vender un tramo, se vende."
           : "Semana de sostener: cumple tu plan y no improvises movimientos extra.") +
-      (gap >= 20 ? " Con los horizontes divergentes, partir cualquier operación en varios tramos reduce el coste de equivocarse en el momento." : ""),
+      (gap >= 20 ? " El corto plazo va por otro lado, así que el momento de ejecutar puede no ser hoy: partir la operación en tramos reduce el coste de equivocarse." : ""),
+  });
+
+  out.push({
+    q: "¿Y si invierto a corto plazo, con una bolsa táctica?",
+    a: mS ? mS.action : zS.action,
+    lvl: mS ? mS.capPct.toFixed(1) + "%" : "—", lvlLab: "de tu bolsa táctica",
+    body: (mS ? `La lectura de corto plazo cierra en ${mS.pos.toFixed(0)} de 100 (${mS.zone.label.toLowerCase()}), que sugiere tener ${mS.capPct.toFixed(1)} de cada 100 de tu bolsa táctica dentro del mercado. ` : "") +
+      (mS && mS.pos < 40 ? "Es una de las ventanas que el corto plazo suele recompensar: si tu plan contempla operar tramos, esta semana es de las buenas."
+        : mS && mS.pos > 60 ? "Semana para asegurar lo táctico y esperar: entrar aquí es entrar caliente, y el retroceso suele llegar antes que la continuación."
+          : "Sin extremo en el corto plazo: la semana no ofrece ventaja táctica clara, así que no fuerces operaciones.") +
+      ` Recuerda que esta cifra se aplica a la bolsa táctica, no al patrimonio entero${gap >= 20 ? `, y que el ciclo dice otra cosa (${mL ? mL.pos.toFixed(0) : "—"} de 100): son decisiones distintas sobre bolsillos distintos.` : "."}`,
   });
 
   out.push({
@@ -689,7 +701,7 @@ function InformeSemanal({ results, palette }) {
             const rkA = snap => HR && HR.zoneOf ? (HR.zoneOf(snap.sth.temp, A.t, "sth", 27).rank + HR.zoneOf(snap.lth.temp, A.t, "lth", 27).rank) / 2 : (snap.sth.temp + snap.lth.temp) / 2;
             const posA = rkA(A.b);
             /* la señal sale del MISMO rank que se imprime, como en la sección 3 */
-            const sigA = E.signalFor((50 - posA) / 27);
+            const sigA = E.signalForRank(posA);
             const col = E.tempColor(posA, palette);
             return (
               <div key={A.t} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "14px 16px", borderLeft: `4px solid ${col}` }}>
@@ -733,8 +745,8 @@ function InformeSemanal({ results, palette }) {
           <tbody>
             {sigs.map((s, i) => {
               /* cifra, zona, señal y sizing salen TODOS del mismo rank */
-              const zr = window.BambuHistory.zoneOf(s.temp, s.type || s.ticker, s.hz || "lth");
-              const rowSig = E.signalFor((50 - zr.rank) / 27);
+              const zr = window.BambuHistory.zoneOf(s.temp, s.type, s.hz);
+              const rowSig = E.signalForRank(zr.rank);
               const sz = E.sizing(rowSig, w.regime, s.price);
               const col = E.tempColor(zr.rank, palette);
               return (
@@ -755,7 +767,7 @@ function InformeSemanal({ results, palette }) {
         {/* LO QUE VIENE */}
         <RepHead n="4" t="Lo que tener en cuenta esta semana" />
         <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "var(--ink-2)", marginBottom: 14 }}>
-          Las mismas cuatro preguntas del Resumen, respondidas en clave de la semana que empieza: qué esperar, qué nivel vigilar y qué haría cambiar la respuesta.
+          Las preguntas del Resumen, respondidas en clave de la semana que empieza: qué esperar, qué nivel vigilar y qué haría cambiar la respuesta. La del dinero va desdoblada, porque un inversor de ciclo y uno de corto plazo no deben hacer lo mismo.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 20 }}>
           {wAhead.map((q, i) => (

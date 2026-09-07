@@ -40,12 +40,14 @@ function SectionEscenarios({ palette, k }) {
   const Res = ({ hr, label }) => {
     const hzK = /STH|corto/i.test(label) ? "sth" : "lth";
     const zz = window.BambuHistory.zoneOf(hr.temp, whatTk, hzK);
-    const col = E.tempColor(zz.rank != null ? zz.rank : hr.temp, palette);
+    /* cifra y señal desde el rank publicado, la misma escala que la zona */
+    const rk = zz.rank != null ? zz.rank : hr.temp;
+    const col = E.tempColor(rk, palette);
     return (
       <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px", flex: 1 }}>
         <div className="tiny muted">{label}</div>
-        <div className="num" style={{ fontSize: 30, fontWeight: 600, color: col, lineHeight: 1.1 }}>{hr.temp.toFixed(0)}°</div>
-        <div style={{ marginTop: 6 }}><SignalPill signal={hr.signal} /></div>
+        <div className="num" style={{ fontSize: 30, fontWeight: 600, color: col, lineHeight: 1.1 }}>{rk.toFixed(0)} <span style={{ fontSize: 13, color: "var(--ink-3)" }}>/100</span></div>
+        <div style={{ marginTop: 6 }}><SignalPill signal={E.signalForRank(rk)} /></div>
         <div className="tiny" style={{ marginTop: 6, fontWeight: 600, color: col }}>{zz.label}</div>
         <div className="tiny muted" style={{ marginTop: 4 }}>composite <span className="num">{E.fmt.signed(hr.composite)}</span></div>
       </div>
@@ -75,7 +77,7 @@ function SectionEscenarios({ palette, k }) {
           <div>
             <div className="tiny muted" style={{ marginBottom: 8 }}>Resultado del escenario · MVRV LTH se recalcula del precio = <span className="num">{(sc.price / base.rpLTH).toFixed(2)}x</span></div>
             <div style={{ display: "flex", gap: 12 }}><Res hr={r.sth} label={`${whatTk} · STH`} /><Res hr={r.lth} label={`${whatTk} · LTH`} /></div>
-            <div className="tiny muted" style={{ marginTop: 12 }}>Línea base (hoy): STH <span className="num">{baseR.sth.temp.toFixed(0)}°</span> {baseR.sth.signal} · LTH <span className="num">{baseR.lth.temp.toFixed(0)}°</span> {baseR.lth.signal}</div>
+            <div className="tiny muted" style={{ marginTop: 12 }}>Línea base (hoy): STH <span className="num">{(() => { const rk = window.BambuHistory.zoneOf(baseR.sth.temp, whatTk, "sth").rank; return rk.toFixed(0) + " de 100 · " + E.signalForRank(rk); })()}</span> · LTH <span className="num">{(() => { const rk = window.BambuHistory.zoneOf(baseR.lth.temp, whatTk, "lth").rank; return rk.toFixed(0) + " de 100 · " + E.signalForRank(rk); })()}</span></div>
           </div>
         </div>
       </Card>
@@ -201,10 +203,16 @@ function SectionAlertas({ results, regime, palette, snapshots, journal, setJourn
   // construir alertas · cada una lidera con la ACCIÓN, la métrica es el porqué
   const alerts = [];
   results.forEach(r => {
-    [["STH", r.sth], ["LTH", r.lth]].forEach(([h, hr]) => {
-      if (hr.zone.id === "caliente") alerts.push({ cat: "zona", sev: "alta", act: "Reduce o cubre posición", t: `${r.asset.ticker}·${h} en zona CALIENTE`, m: "El mercado está caro (distribución). No es momento de comprar; protege ganancias." });
-      else if (hr.zone.id === "fria") alerts.push({ cat: "zona", sev: "buena", act: "Considera acumular", t: `${r.asset.ticker}·${h} en zona FRÍA`, m: "El mercado está barato (acumulación). Oportunidad estructural de compra escalonada." });
-      if (Math.abs(hr.composite) >= 1) alerts.push({ cat: "senal", sev: hr.composite > 0 ? "buena" : "alta", act: hr.composite > 0 ? "Señal de compra fuerte" : "Señal de venta fuerte", t: `Convicción alta en ${r.asset.ticker}·${h}`, m: `El modelo da ${hr.signal} (índice ${E.fmt.signed(hr.composite)}). Cuanto más extremo, más fiable.` });
+    [["STH", r.sth, "sth"], ["LTH", r.lth, "lth"]].forEach(([h, hr, hk]) => {
+      /* zona y señal desde el rank publicado: con los ids crudos la alerta no
+         se emitía aunque el Resumen mostrara zona extrema. */
+      const zz = window.BambuHistory.zoneOf(hr.temp, r.asset.type, hk);
+      const sg = E.signalForRank(zz.rank);
+      if (zz.id === "caliente") alerts.push({ cat: "zona", sev: "alta", act: "Reduce o cubre posición", t: `${r.asset.ticker}·${h} en zona de DISTRIBUCIÓN (${zz.rank.toFixed(0)} de 100)`, m: "El mercado está caro frente a su historial. No es momento de comprar; protege ganancias." });
+      else if (zz.id === "calida") alerts.push({ cat: "zona", sev: "alta", act: "Empieza a asegurar por tramos", t: `${r.asset.ticker}·${h} entra en distribución temprana (${zz.rank.toFixed(0)} de 100)`, m: "La lectura ha superado los 60 de 100: conviene ir soltando por tramos, sin esperar la cifra redonda." });
+      else if (zz.id === "fria") alerts.push({ cat: "zona", sev: "buena", act: "Considera acumular", t: `${r.asset.ticker}·${h} en zona de CAPITULACIÓN (${zz.rank.toFixed(0)} de 100)`, m: "El mercado está barato frente a su historial. Oportunidad estructural de compra escalonada." });
+      else if (zz.id === "temprana") alerts.push({ cat: "zona", sev: "buena", act: "Acumula en tramos", t: `${r.asset.ticker}·${h} en zona de ACUMULACIÓN (${zz.rank.toFixed(0)} de 100)`, m: "La lectura está por debajo de 40 de 100: franja en la que aportar ha salido bien más veces que mal." });
+      if (sg === "COMPRA FUERTE" || sg === "VENTA FUERTE") alerts.push({ cat: "senal", sev: sg === "COMPRA FUERTE" ? "buena" : "alta", act: sg === "COMPRA FUERTE" ? "Zona de compra con convicción" : "Zona de salida avanzada", t: `Lectura extrema en ${r.asset.ticker}·${h}`, m: `La lectura marca ${zz.rank.toFixed(0)} de 100 (${sg}). Cuanto más extrema, más fiable ha sido históricamente.` });
     });
   });
   if (snapshots.length >= 2) {

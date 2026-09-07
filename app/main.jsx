@@ -91,8 +91,11 @@ function App() {
     const p = localStorage.getItem("bambu_page");
     return (p && p !== "ingreso" && p !== "blog" && p !== "mercado") ? p : "resumen";
   });
+  const ASSETS_KEY = "bambu_assets_" + (window.BambuDataDate || "v11");
   const [assets, setAssets] = React.useState(() => {
-    try { const s = localStorage.getItem("bambu_assets_v11"); if (s) return JSON.parse(s); } catch (e) {}
+    try { const s = localStorage.getItem(ASSETS_KEY); if (s) return JSON.parse(s); } catch (e) {}
+    /* limpia versiones de fechas anteriores para no acumular basura */
+    try { Object.keys(localStorage).filter(k => k.indexOf("bambu_assets_") === 0 && k !== ASSETS_KEY).forEach(k => localStorage.removeItem(k)); } catch (e) {}
     return DD.freshAssets();
   });
   const [activeAsset, setActiveAsset] = React.useState(assets[0].id);
@@ -117,7 +120,7 @@ function App() {
   });
 
   React.useEffect(() => { localStorage.setItem("bambu_page", page); }, [page]);
-  React.useEffect(() => { try { localStorage.setItem("bambu_assets_v11", JSON.stringify(assets)); } catch (e) {} }, [assets]);
+  React.useEffect(() => { try { localStorage.setItem(ASSETS_KEY, JSON.stringify(assets)); } catch (e) {} }, [assets]);
   React.useEffect(() => { try { localStorage.setItem("bambu_snaps", JSON.stringify(snapshots)); } catch (e) {} }, [snapshots]);
   React.useEffect(() => { try { localStorage.setItem("bambu_pf", JSON.stringify(portfolio)); } catch (e) {} }, [portfolio]);
   React.useEffect(() => { try { localStorage.setItem("bambu_journal", JSON.stringify(journal)); } catch (e) {} }, [journal]);
@@ -157,9 +160,18 @@ function App() {
     setSnapshots(prev => [...prev.map(s => ({ ...s, live: false })), snap]);
   };
 
-  const mt = marketTemp(results);
-  const mz = E.zoneFor(mt);
-  const mtCol = E.tempColor(mt, palette);
+  /* La barra muestra los DOS horizontes por separado: promediarlos daba una
+     cifra que no sirve a ninguno de los dos perfiles, y este chip aparece en
+     todas las pestañas. */
+  const HB = window.BambuHistory;
+  const rkBar = hz => (HB && HB.zoneOf && results.length)
+    ? results.reduce((a, r) => a + HB.zoneOf(r[hz].temp, r.asset.type, hz, k).rank, 0) / results.length
+    : marketTemp(results);
+  const barLth = rkBar("lth"), barSth = rkBar("sth");
+  const mt = marketPos(results, k);
+  const mz = (window.BambuHistory && window.BambuHistory.zoneOf) ? window.BambuHistory.zoneOf(barLth, null) : E.zoneFor(mt);
+  const mtCol = E.tempColor(barLth, palette);
+  const sthCol = E.tempColor(barSth, palette);
   const dataAsOf = React.useMemo(() => {
     const R = window.BambuRealData && window.BambuRealData.BTC;
     const iso = window.BambuDataDate || (R ? R.latestIso : "2026-06-28");
@@ -172,14 +184,14 @@ function App() {
     const P = page;
     if (!TITLES[P]) return null;
     switch (page) {
-      case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} onGo={setPage} />;
+      case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} onGo={setPage} k={k} />;
       case "heatmap":  return <SectionHeatmap results={results} regime={regime} palette={palette} k={k} />;
       case "historico":return <SectionHistorico results={results} regime={regime} palette={palette} k={k}
                                 snapshots={snapshots} onSaveSnapshot={onSaveSnapshot} />;
       case "ciclo":    return <SectionCiclo palette={palette} />;
       case "backtest": return <SectionBacktest palette={palette} k={k} assets={assets} />;
       case "historial": return <SectionHistorial palette={palette} />;
-      case "sizing":   return <SectionSizing results={results} regime={regime} palette={palette} />;
+      case "sizing":   return <SectionSizing results={results} regime={regime} palette={palette} k={k} />;
       case "onchain":  return <SectionOnchain results={results} palette={palette} k={k} />;
       case "macro":    return <SectionMacro results={results} palette={palette} />;
       case "cartera":  return <SectionCartera results={results} regime={regime} palette={palette} portfolio={portfolio} setPortfolio={setPortfolio} />;
@@ -243,8 +255,8 @@ function App() {
             <span className="v num">{E.fmt.usd(eth.vals.price)}</span>
           </div>}
           <div className="tb-chip tb-hide-sm" style={{ background: mixSoft(mtCol), borderColor: mixSoft(mtCol, .6) }}>
-            <span className="k">Temp. mercado</span>
-            <span className="v num" style={{ color: mtCol }}>{mt.toFixed(0)}° · {mz.label}</span>
+            <span className="k">BTC+ETH</span>
+            <span className="v num" style={{ color: mtCol, whiteSpace: "nowrap" }}>ciclo {barLth.toFixed(0)} · corto {barSth.toFixed(0)}</span>
           </div>
           <div className="tb-chip tb-hide-sm" title="Fecha del último dato on-chain real (ChartInspect)">
             <span className="k">Actualizado</span>

@@ -208,12 +208,20 @@
      netflow, doi, rhodl, reserve, lthSup, netEmS/L); el resto (precio, SOPR,
      NUPL, MVRV-Z, técnicos…) se sobreescribe con la última fila real cargada
      por btc_real.js / eth_real.js, para que nunca queden desactualizados. */
+  /* FUENTE ÚNICA de los valores de un día. El Resumen partía de PRELOAD (que
+     aporta ssr, funding, netflow, doi, rhodl, reserve, lthSup) mientras el
+     Historial, el backtest y el informe computaban desde filas crudas: eso
+     desplazaba el composite ~1,5 puntos y en el corte de banda volteaba el
+     veredicto. Cualquier módulo que calcule un día debe usar esto. */
+  function valuesFor(type, row) {
+    const base = (PRELOAD[type] || PRELOAD.BTC);
+    return row ? { ...base, ...row } : { ...base };
+  }
   function freshAssets() {
     return ASSETS_INIT.map(a => {
       const R = typeof window !== "undefined" && window.BambuRealData && window.BambuRealData[a.type];
-      if (!R || !R.count) return { ...a, values: { ...a.values } };
-      const last = R.rowAt(R.count - 1);
-      return { ...a, values: { ...a.values, ...last } };
+      if (!R || !R.count) return { ...a, values: valuesFor(a.type, null) };
+      return { ...a, values: valuesFor(a.type, R.rowAt(R.count - 1)) };
     });
   }
 
@@ -264,7 +272,7 @@
   };
 
   window.BambuData = {
-    PALETTES, ZONES, SIGNALS, REGIMES, metricsFor, PRELOAD, ASSETS_INIT, freshAssets,
+    PALETTES, ZONES, SIGNALS, REGIMES, metricsFor, PRELOAD, ASSETS_INIT, freshAssets, valuesFor,
     BACKTEST, STATS, BASE_WEIGHT: 0.05,
   };
 })();

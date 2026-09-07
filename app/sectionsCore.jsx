@@ -6,10 +6,22 @@
 function flatSignals(results) {
   const out = [];
   results.forEach(r => {
-    out.push({ key: r.asset.ticker + "·STH", ticker: r.asset.ticker, horizon: "STH", ...r.sth });
-    out.push({ key: r.asset.ticker + "·LTH", ticker: r.asset.ticker, horizon: "LTH", ...r.lth });
+    out.push({ key: r.asset.ticker + "·STH", ticker: r.asset.ticker, type: r.asset.type, horizon: "STH", hz: "sth", ...r.sth });
+    out.push({ key: r.asset.ticker + "·LTH", ticker: r.asset.ticker, type: r.asset.type, horizon: "LTH", hz: "lth", ...r.lth });
   });
   return out;
+}
+/* Posición del mercado en la escala PUBLICADA. Varios sitios calculaban
+   marketTemp crudo y lo etiquetaban con zoneFor (escala vieja), así que el chip
+   de la barra decía NEUTRAL mientras el contenido pedía reducir. */
+function marketPos(results, k) {
+  const H = window.BambuHistory;
+  if (!results || !results.length) return 50;
+  if (!H || !H.zoneOf) return marketTemp(results);
+  k = k || 27;
+  return results.reduce((acc, r) => acc +
+    (H.zoneOf(r.sth.temp, r.asset.type, "sth", k).rank +
+     H.zoneOf(r.lth.temp, r.asset.type, "lth", k).rank) / 2, 0) / results.length;
 }
 function marketTemp(results) {
   const s = flatSignals(results);
@@ -28,34 +40,52 @@ const KPI = ({ lab, val, meta, valStyle, mono }) => (
 );
 
 /* ---------- Veredicto dominante: la decisión de un vistazo ---------- */
+/* Un veredicto POR PERFIL DE INVERSOR. Promediar los dos horizontes daba una
+   respuesta que no servía a ninguno: hoy el corto plazo puede estar en venta
+   y el ciclo en compra, y la media decía "reducir" — algo que no debe hacer
+   ninguno de los dos. Cada perfil recibe su lectura, su señal y su exposición. */
+const STANCE = {
+  "COMPRA FUERTE":  ["ACUMULAR", "Comprar con convicción"],
+  "COMPRA NATURAL": ["ACUMULAR", "Comprar en tramos"],
+  "COMPRA TEMPRANA":["ACUMULACIÓN SELECTIVA", "Empezar a comprar, en tramos"],
+  "NEUTRAL":        ["NEUTRAL · SELECTIVO", "Mantener · esperar confirmación"],
+  "REDUCIR":        ["DISTRIBUIR GRADUAL", "Reducir / cubrir posición"],
+  "VENTA":          ["DISTRIBUIR", "Asegurar resultado por tramos"],
+  "VENTA FUERTE":   ["DISTRIBUIR · FUERA", "Vender / postura defensiva"],
+};
+const CAP_HINT = {
+  "COMPRA FUERTE":  "Zona de convicción: puedes acercarte al máximo que permita tu plan.",
+  "COMPRA NATURAL": "Buen momento para aportar; reparte en dos o tres tramos.",
+  "COMPRA TEMPRANA":"Empieza bajo y sube si el mercado enfría más.",
+  "NEUTRAL":        "Sin ventaja clara: sostén lo que tienes y no fuerces movimientos.",
+  "REDUCIR":        "Empieza a recortar por tramos; no es zona para aumentar.",
+  "VENTA":          "Zona de salida: asegura resultado por tramos.",
+  "VENTA FUERTE":   "Zona de salida avanzada: prioriza asegurar sobre acertar el máximo.",
+};
+function horizonVerdict(results, regime, hz) {
+  const H = window.BambuHistory, reg = DD.REGIMES[regime];
+  const ranks = results.map(r => H && H.zoneOf
+    ? H.zoneOf(r[hz].temp, r.asset.type, hz, 27).rank
+    : r[hz].temp);
+  const pos = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 50;
+  const sig = E.signalForRank(pos);
+  const sg = DD.SIGNALS[sig];
+  /* La bolsa de corto plazo es una fracción del capital, así que su exposición
+     se expresa sobre ese tramo y no sobre la cartera entera. */
+  const capPct = DD.BASE_WEIGHT * sg.long * reg.mult * 100 * (hz === "sth" ? 0.5 : 1);
+  const st = STANCE[sig] || STANCE.NEUTRAL;
+  return { hz, pos, zone: H && H.zoneOf ? H.zoneOf(pos, null) : E.zoneFor(pos),
+           sig, capPct, stance: st[0], action: st[1], hint: CAP_HINT[sig], reg };
+}
 function marketVerdict(results, regime) {
   const mt = marketTemp(results);
-  const reg = DD.REGIMES[regime];
-  const H = window.BambuHistory;
-  /* Cada horizonte se mide contra SU propia distribución y luego se promedian
-     las posiciones. Promediar temperaturas crudas y rankearlas contra una sola
-     distribución no da un percentil válido. */
-  const parts = [];
-  results.forEach(r => {
-    const t = r.asset.type;
-    parts.push(H && H.zoneOf ? H.zoneOf(r.sth.temp, t, "sth", 27).rank : r.sth.temp);
-    parts.push(H && H.zoneOf ? H.zoneOf(r.lth.temp, t, "lth", 27).rank : r.lth.temp);
-  });
-  const pos = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : mt;
-  const zone = (H && H.zoneOf) ? H.zoneOf(pos, null) : E.zoneFor(pos);
-  /* comp desde la escala publicada: si el titular usa la posición, la señal y la
-     exposición tienen que moverse con ella, no con la temperatura cruda. */
-  const comp = (50 - pos) / 27;
-  const sig = E.signalFor(comp);
-  const sg = DD.SIGNALS[sig];
-  const capPct = DD.BASE_WEIGHT * sg.long * reg.mult * 100;
-  let stance, action;
-  if (pos < 20) { stance = "ACUMULAR"; action = "Comprar con convicción"; }
-  else if (pos < 40) { stance = "ACUMULACIÓN SELECTIVA"; action = "Comprar en tramos"; }
-  else if (pos < 60) { stance = "NEUTRAL · SELECTIVO"; action = "Mantener · esperar confirmación"; }
-  else if (pos < 80) { stance = "DISTRIBUIR GRADUAL"; action = "Reducir / cubrir posición"; }
-  else { stance = "DISTRIBUIR · FUERA"; action = "Vender / postura defensiva"; }
-  return { mt, pos, zone, sig, capPct, stance, action, reg };
+  const sth = horizonVerdict(results, regime, "sth");
+  const lth = horizonVerdict(results, regime, "lth");
+  /* pos/sig/stance del objeto raíz siguen siendo la lectura de CICLO, que es
+     el horizonte por defecto de Bambu; el corto plazo va aparte. */
+  return { mt, sth, lth, gap: Math.abs(sth.pos - lth.pos), reg: DD.REGIMES[regime],
+           pos: lth.pos, zone: lth.zone, sig: lth.sig, capPct: lth.capPct,
+           stance: lth.stance, action: lth.action };
 }
 
 /* ---------- Qué sostiene la lectura y qué la rompería ----------
@@ -155,54 +185,81 @@ function DriversCard({ results, regime, palette }) {
 
 function VerdictBanner({ results, regime, palette, title }) {
   const v = marketVerdict(results, regime);
-  const col = E.tempColor(v.mt, palette);
   const grad = "linear-gradient(90deg," + (DD.PALETTES[palette] || DD.PALETTES.sobria).stops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
-  const HH = window.BambuHistory;
-  const rk = (hz) => results.reduce((a, r) => a + (HH && HH.zoneOf ? HH.zoneOf(r[hz].temp, r.asset.type, hz, 27).rank : r[hz].temp), 0) / results.length;
-  const sthT = rk("sth"), lthT = rk("lth");
-  const align = Math.abs(sthT - lthT) < 20;
   const mPct = Math.round(v.reg.mult * 100);
   const regPhrase = v.reg.mult < 1
     ? `Fase ${regime}: por prudencia, invierte solo el ${mPct}% de tu tamaño habitual en cada compra — la fase puede extenderse y conviene guardar munición.`
     : v.reg.mult > 1
       ? `Fase ${regime}: históricamente favorable — puedes invertir hasta el ${mPct}% de tu tamaño habitual en cada compra.`
       : `Fase ${regime}: sin sesgo claro — mantén tu tamaño habitual de compra (100%).`;
-  const reasons = [
-    regPhrase,
-    `Lectura ${v.pos.toFixed(0)} de 100 → ${v.zone.label}. Es el promedio de las posiciones de corto y largo plazo, cada una medida contra su propio historial: bajo 20 casi nunca estuvo más frío, sobre 80 casi nunca más caliente.`,
-    align ? `Corto y largo plazo alineados (${sthT.toFixed(0)} / ${lthT.toFixed(0)} de 100): lectura más fiable.`
-          : `Divergencia: corto plazo en ${sthT.toFixed(0)} y largo plazo en ${lthT.toFixed(0)} de 100. La cifra global promedia ambos, así que conviene mirar cada horizonte por separado antes de mover capital.`,
-  ];
-  return (
-    <div className="card" style={{ marginBottom: 16, borderLeft: `6px solid ${col}`, overflow: "hidden", padding: 0 }}>
-      <div className="grid" style={{ gridTemplateColumns: "1.6fr 1fr 1.2fr", gap: 0 }}>
-        <div style={{ padding: "18px 22px" }}>
-          <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".14em" }}>{title || "Veredicto del mercado"}</div>
-          <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-.02em", color: col, lineHeight: 1.05, marginTop: 6 }}>{v.stance}</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6, color: "var(--ink)" }}>{v.action}</div>
-          <div style={{ marginTop: 12, height: 8, borderRadius: 5, background: grad, position: "relative" }}>
-            <div style={{ position: "absolute", left: v.pos + "%", top: -3, width: 4, height: 14, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 2px #fff" }} />
+
+  /* Un bloque por perfil de inversor: cada uno con SU lectura, SU señal y SU
+     exposición, sin promediar horizontes que dicen cosas distintas. */
+  const Block = ({ d, perfil, plazo, help }) => {
+    const col = E.tempColor(d.pos, palette);
+    return (
+      <div style={{ padding: "18px 22px", flex: "1 1 300px", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span className="tiny" style={{ textTransform: "uppercase", letterSpacing: ".13em", fontWeight: 700, color: col }}>{perfil}</span>
+          <span className="tiny muted">{plazo}</span>
+          <HelpDot term={help[0]} def={help[1]} />
+        </div>
+        <div style={{ fontSize: 25, fontWeight: 700, letterSpacing: "-.02em", color: col, lineHeight: 1.08, marginTop: 7 }}>{d.stance}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 5, color: "var(--ink)" }}>{d.action}</div>
+        <div style={{ marginTop: 11, height: 8, borderRadius: 5, background: grad, position: "relative" }}>
+          <div style={{ position: "absolute", left: d.pos + "%", top: -3, width: 4, height: 14, background: "#1B2420", borderRadius: 2, transform: "translateX(-50%)", boxShadow: "0 0 0 2px #fff" }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 16, marginTop: 13, flexWrap: "wrap" }}>
+          <div>
+            <div className="tiny muted">Lectura</div>
+            <div className="num" style={{ fontSize: 21, fontWeight: 700, color: col, lineHeight: 1.1 }}>{d.pos.toFixed(0)} <span className="tiny muted" style={{ fontWeight: 500 }}>/100</span></div>
+            <div className="tiny" style={{ color: col, fontWeight: 700 }}>{d.zone.label}</div>
           </div>
+          <div>
+            <div className="tiny muted">Exposición sugerida <HelpDot k="posicionamiento" /></div>
+            <div className="num" style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.1 }}>{d.capPct.toFixed(1)}%</div>
+            <div className="tiny muted">{d.hz === "sth" ? "de tu bolsa táctica" : "de tu portafolio en cripto"}</div>
+          </div>
+          <div style={{ paddingBottom: 2 }}><SignalPill signal={d.sig} /></div>
         </div>
-        <div style={{ padding: "18px 22px", borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em" }}>Exposición sugerida <HelpDot k="posicionamiento" /></div>
-          <div className="num" style={{ fontSize: 27, fontWeight: 700, color: col, lineHeight: 1.1, marginTop: 3 }}>{v.capPct.toFixed(1)}%</div>
-          <div className="tiny muted">de tu portafolio en cripto</div>
-          <div style={{ marginTop: 6 }}><SignalPill signal={v.sig} /></div>
-          <div className="tiny muted" style={{ marginTop: 8, lineHeight: 1.4 }}>Cuánto tener invertido hoy. Empieza bajo en la acumulación temprana y sube si el mercado enfría más.</div>
+        <div className="tiny muted" style={{ marginTop: 9, lineHeight: 1.45 }}>{d.hint}</div>
+      </div>
+    );
+  };
+
+  const colL = E.tempColor(v.lth.pos, palette);
+  return (
+    <div className="card" style={{ marginBottom: 16, borderLeft: `6px solid ${colL}`, overflow: "hidden", padding: 0 }}>
+      <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".14em", padding: "14px 22px 0" }}>
+        {title || "Veredicto del mercado"} · dos perfiles, dos respuestas
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap" }}>
+        <Block d={v.lth} perfil="Inversor de ciclo" plazo="LTH · meses y años"
+          help={["Inversor de ciclo (LTH)", "Compra para mantener durante uno o varios ciclos de halving. Su decisión es CUÁNTO tener, no cuándo entrar exactamente. Se guía por la lectura de largo plazo, que se mueve despacio y cambia de zona dos o tres veces al año."]} />
+        <div style={{ borderLeft: "1px solid var(--border)", flex: "1 1 300px", minWidth: 0, display: "flex" }}>
+          <Block d={v.sth} perfil="Inversor de corto plazo" plazo="STH · semanas"
+            help={["Inversor de corto plazo (STH)", "Opera con una bolsa táctica, una fracción del capital destinada a aprovechar movimientos de semanas. Su decisión es CUÁNDO ejecutar. Se guía por la lectura de corto plazo, que se mueve rápido y exige revisarla más a menudo."]} />
         </div>
-        <div style={{ padding: "16px 22px", borderLeft: "1px solid var(--border)" }}>
-          <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 7 }}>Por qué</div>
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-            {reasons.map((r, i) => <li key={i} style={{ fontSize: 11.5, lineHeight: 1.4, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: col, fontWeight: 700 }}>›</span>{r}</li>)}
-          </ul>
-        </div>
+      </div>
+      <div style={{ borderTop: "1px solid var(--border)", padding: "13px 22px", background: "var(--surface-2, #F2F6F2)" }}>
+        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 6 }}>Por qué</div>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+          <li style={{ fontSize: 12, lineHeight: 1.5, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: colL, fontWeight: 700 }}>›</span>{regPhrase}</li>
+          <li style={{ fontSize: 12, lineHeight: 1.5, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: colL, fontWeight: 700 }}>›</span>
+            {v.gap < 20
+              ? `Los dos horizontes coinciden (corto ${v.sth.pos.toFixed(0)} · ciclo ${v.lth.pos.toFixed(0)} de 100), así que ambos perfiles apuntan en la misma dirección y la lectura es más fiable.`
+              : `Los dos horizontes divergen ${v.gap.toFixed(0)} puntos (corto ${v.sth.pos.toFixed(0)} · ciclo ${v.lth.pos.toFixed(0)} de 100). ${v.sth.pos > v.lth.pos ? "El ciclo aún acompaña, pero el corto plazo está recalentado: el inversor de ciclo puede seguir aportando por tramos mientras el táctico espera o asegura." : "El corto plazo da un alivio que no cambia la fase de ciclo: el táctico puede aprovecharlo, el de ciclo no debería leerlo como un giro."}`}
+          </li>
+          <li style={{ fontSize: 12, lineHeight: 1.5, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: colL, fontWeight: 700 }}>›</span>
+            La escala mide la posición frente al historial del propio activo, calibrada ciclo por ciclo: bajo 20 casi nunca estuvo más frío, sobre 80 casi nunca más caliente.
+          </li>
+        </ul>
       </div>
     </div>
   );
 }
-
-function SectionResumen({ results, regime, palette, onGo }) {
+function SectionResumen({ results, regime, palette, onGo, k }) {
+  k = k || 27;
   const [tab, setTab] = React.useState(results[0].asset.id);
   const valid = results.some(r => r.asset.id === tab);
   const active = valid ? tab : results[0].asset.id;
@@ -229,24 +286,27 @@ function SectionResumen({ results, regime, palette, onGo }) {
 }
 
 /* ---------- vista consolidada ---------- */
-function ResumenConsolidado({ results, regime, palette }) {
+function ResumenConsolidado({ results, regime, palette, k }) {
+  k = k || 27;
   const sigs = flatSignals(results);
   const mt = marketTemp(results);
+  const mtPos = marketPos(results, k);
   const mz = (window.BambuHistory && window.BambuHistory.zoneOf) ? window.BambuHistory.zoneOf(mtPos, null) : E.zoneFor(mt);
   const reg = DD.REGIMES[regime];
   const ST = DD.STATS;
   const btc = results.find(r => r.asset.type === "BTC") || results[0];
   const eth = results.find(r => r.asset.type === "ETH");
-  const mtPos = (window.BambuHistory && window.BambuHistory.zoneOf && results[0])
-    ? results.reduce((acc, r) => acc + (window.BambuHistory.zoneOf(r.sth.temp, r.asset.type, "sth", 27).rank + window.BambuHistory.zoneOf(r.lth.temp, r.asset.type, "lth", 27).rank) / 2, 0) / results.length
-    : mt;
   const mtCol = E.tempColor(mtPos, palette);
 
   // estados consolidados STH y LTH (media de temperaturas por horizonte)
   const sthTemps = results.map(r => r.sth.temp), lthTemps = results.map(r => r.lth.temp);
   const sthT = sthTemps.reduce((a, b) => a + b, 0) / sthTemps.length;
   const lthT = lthTemps.reduce((a, b) => a + b, 0) / lthTemps.length;
-  const sthZ = E.zoneFor(sthT), lthZ = E.zoneFor(lthT);
+  const HP = window.BambuHistory;
+  const rkOf = hz => results.reduce((a, r) => a + (HP && HP.zoneOf ? HP.zoneOf(r[hz].temp, r.asset.type, hz, k).rank : r[hz].temp), 0) / results.length;
+  const sthRk = rkOf("sth"), lthRk = rkOf("lth");
+  const sthZ = HP && HP.zoneOf ? HP.zoneOf(sthRk, null) : E.zoneFor(sthT);
+  const lthZ = HP && HP.zoneOf ? HP.zoneOf(lthRk, null) : E.zoneFor(lthT);
 
   // gradiente de la paleta para las barras de estado
   const palStops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
@@ -283,7 +343,7 @@ function ResumenConsolidado({ results, regime, palette }) {
                     <span className="num" style={{ fontSize: 26, fontWeight: 600 }}>{E.fmt.signed(s.composite)}</span>
                     <span className="muted tiny">convicción</span>
                     <span className="spacer" style={{ flex: 1 }} />
-                    <span className="num" style={{ fontSize: 16, fontWeight: 600, color: col }}>{(window.BambuHistory.zoneOf(s.temp, s.type || s.ticker, s.hz || "lth").rank).toFixed(0)}</span>
+                    <span className="num" style={{ fontSize: 16, fontWeight: 600, color: col }}>{(window.BambuHistory.zoneOf(s.temp, s.type, s.hz, k).rank).toFixed(0)}</span>
                   </div>
                   {/* barra de estado coloreada (frío→caliente) con marcador */}
                   <div style={{ marginTop: 9, height: 9, borderRadius: 5, background: palGrad, position: "relative" }}>
@@ -329,7 +389,9 @@ function ResumenConsolidado({ results, regime, palette }) {
             <thead><tr><th>Zona</th><th className="c">Rango sugerido</th><th className="r">NET</th></tr></thead>
             <tbody>
               {sigs.slice(0, 4).map((s, i) => {
-                const sz = E.sizing(s.signal, regime, results.find(r => r.asset.ticker === s.ticker).vals.price);
+                /* sizing desde la lectura publicada de esa fila, no del composite crudo */
+                const sRank = window.BambuHistory.zoneOf(s.temp, s.type, s.hz, k).rank;
+                const sz = E.sizing(E.signalForRank(sRank), regime, results.find(r => r.asset.ticker === s.ticker).vals.price);
                 const lo = sz.longAdj * 0.85 * 100, hi = sz.longAdj * 1.15 * 100;
                 return (
                   <tr key={i}>
@@ -420,7 +482,7 @@ function ResumenAsset({ result, regime, palette }) {
     const band = bOf(hr.temp, hz), pos = rankOf(hr.temp, hz);
     const col = E.tempColor(pos, palette);
     return (
-      <Card title={`${a.ticker} · ${label}`} right={<SignalPill signal={E.signalFor((50 - pos) / 27)} />}>
+      <Card title={`${a.ticker} · ${label}`} right={<SignalPill signal={E.signalForRank(pos)} />}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
           <div>
             <div className="num" style={{ fontSize: 40, fontWeight: 600, color: col, lineHeight: 1 }}>{pos.toFixed(0)} <span style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-3)" }}>/100</span></div>
@@ -483,8 +545,10 @@ function ResumenAsset({ result, regime, palette }) {
         {/* posicionamiento en lenguaje de inversor */}
         <Card title={<>¿Cómo posicionarte hoy? <HelpDot k="posNet" /></>} sub={`Por cada $100 de tu portafolio total, cuánto conviene tener en ${a.ticker} según cada horizonte · fase ${regime}`}>
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[["Tu próxima compra · corto plazo (STH)", result.sth, "posLong"], ["Tu patrimonio · ciclo (LTH)", result.lth, "posHedge"]].map(([lab, hr]) => {
-              const sz = E.sizing(hr.signal, regime, a.values.price);
+            {[["Tu próxima compra · corto plazo (STH)", result.sth, "posLong", "sth"], ["Tu patrimonio · ciclo (LTH)", result.lth, "posHedge", "lth"]].map(([lab, hr, hk, hz]) => {
+              const hzRank = rankOf(hr.temp, hz);
+              const hzSig = E.signalForRank(hzRank);
+              const sz = E.sizing(hzSig, regime, a.values.price);
               const inv = Math.max(0, sz.longAdj * 100), resv = Math.max(0, sz.hedge * 100);
               const net = sz.net * 100;
               const wait = Math.max(0, 100 - inv - resv);
@@ -492,7 +556,10 @@ function ResumenAsset({ result, regime, palette }) {
                 <div key={lab} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "15px 17px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 700, fontSize: 13.5 }}>{lab}</span>
-                    <SignalPill signal={hr.signal} />
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                      <span className="num tiny muted">{hzRank.toFixed(0)}/100</span>
+                      <SignalPill signal={hzSig} />
+                    </span>
                   </div>
                   <div style={{ display: "flex", gap: 18, marginTop: 12, flexWrap: "wrap" }}>
                     <div><div className="num" style={{ fontSize: 24, fontWeight: 700, color: "var(--brand)" }}>${inv.toFixed(0)}</div><div className="tiny muted">en {a.ticker}</div></div>
@@ -507,9 +574,9 @@ function ResumenAsset({ result, regime, palette }) {
                   </div>
                   <div className="tiny muted" style={{ marginTop: 5 }}>█ verde = en {a.ticker} · gris = en espera (USD){resv >= 0.5 ? " · rojo = cobertura" : ""}</div>
                   <div className="tiny muted" style={{ marginTop: 8, lineHeight: 1.55 }}>
-                    {hr.signal.indexOf("COMPRA") >= 0
+                    {hzSig.indexOf("COMPRA") >= 0
                       ? `Zona de compra: de cada $100 de tu portafolio total, unos $${inv.toFixed(0)} en ${a.ticker}; el resto espera en USD para comprar en tramos si sigue barato.`
-                      : hr.signal.indexOf("VENTA") >= 0
+                      : hzSig.indexOf("VENTA") >= 0
                         ? `Zona de venta: baja a ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y deja el resto en USD${resv >= 0.5 ? `, con ~$${resv.toFixed(0)} de cobertura` : ""}.`
                         : `Sin ventaja clara: mantén ~$${inv.toFixed(0)} de cada $100 en ${a.ticker} y no añadas hasta que la zona cambie.`}
                   </div>
@@ -519,7 +586,7 @@ function ResumenAsset({ result, regime, palette }) {
           </div>
           <div className="divider" style={{ margin: "14px 0 10px" }} />
           <div className="tiny muted" style={{ lineHeight: 1.55 }}>
-            <strong>Cómo usarlo:</strong> el porcentaje es sobre tu <strong>portafolio total</strong> (igual que la “Exposición sugerida” del veredicto de arriba). Compara la “posición neta” con lo que realmente tienes invertido: si tienes más, no añadas (o reduce); si tienes menos y la señal es de compra, acércate al nivel sugerido en tramos. Si el precio cae de <strong className="num">{E.fmt.usd(E.sizing(result.lth.signal, regime, a.values.price).stopUsd)}</strong>, el modelo considera que el escenario cambió: revísalo antes de seguir añadiendo.
+            <strong>Cómo usarlo:</strong> el porcentaje es sobre tu <strong>portafolio total</strong> (igual que la “Exposición sugerida” del veredicto de arriba). Compara la “posición neta” con lo que realmente tienes invertido: si tienes más, no añadas (o reduce); si tienes menos y la señal es de compra, acércate al nivel sugerido en tramos. Si el precio cae de <strong className="num">{E.fmt.usd(E.sizing(E.signalForRank(rankOf(result.lth.temp, "lth")), regime, a.values.price).stopUsd)}</strong>, el modelo considera que el escenario cambió: revísalo antes de seguir añadiendo.
           </div>
         </Card>
       </div>
@@ -678,7 +745,7 @@ function SectionIngreso({ assets, results, regime, palette, onChange, onAddAsset
           <Card title={`Resultado · ${asset.ticker} ${horizon}`}>
             <div style={{ textAlign: "center", padding: "6px 0 4px" }}>
               <div className="num" style={{ fontSize: 46, fontWeight: 600, color: col, lineHeight: 1 }}>{(window.BambuHistory.zoneOf(hr.temp, asset.type, horizon === "STH" ? "sth" : "lth").rank).toFixed(0)} <span style={{ fontSize: 18, fontWeight: 500, color: "var(--ink-3)" }}>/100</span></div>
-              <div style={{ marginTop: 8 }}><SignalPill signal={E.signalFor((50 - window.BambuHistory.zoneOf(hr.temp, asset.type, horizon === "STH" ? "sth" : "lth").rank) / 27)} big /></div>
+              <div style={{ marginTop: 8 }}><SignalPill signal={E.signalForRank(window.BambuHistory.zoneOf(hr.temp, asset.type, horizon === "STH" ? "sth" : "lth").rank)} big /></div>
               <div style={{ marginTop: 10, fontSize: 13, fontWeight: 600, letterSpacing: ".08em", color: col }}>{(window.BambuHistory && window.BambuHistory.bandsFor ? window.BambuHistory.bandOf(hr.temp, window.BambuHistory.bandsFor(asset.type, horizon === "STH" ? "sth" : "lth", 27).bands).label : hr.zone.label)}</div>
             </div>
             <div className="divider" style={{ margin: "14px 0" }} />
@@ -748,4 +815,4 @@ function SignalDotForScore({ score }) {
   return <span className={"badge " + cls}>{lab}</span>;
 }
 
-Object.assign(window, { SectionResumen, SectionIngreso, flatSignals, marketTemp, dedupeMarkers, convRanges, marketVerdict, DriversCard, verdictDrivers });
+Object.assign(window, { SectionResumen, SectionIngreso, flatSignals, marketTemp, marketPos, dedupeMarkers, convRanges, marketVerdict, horizonVerdict, DriversCard, verdictDrivers });
