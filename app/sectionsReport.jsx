@@ -3,6 +3,21 @@
    Une el antiguo "Blog · Informes" con el "Reporte 360".
    ============================================================ */
 
+/* ---------- pluralización ----------
+   El informe se vende por la calidad de la prosa, así que ningún contador
+   generado debe imprimir "1 puntos". plu() recibe el número y la palabra en
+   singular; el plural es el singular + "s" salvo que se indique. */
+function plu(n, sing, plural) {
+  return Math.abs(n) === 1 ? sing : (plural || sing + "s");
+}
+function nplu(n, sing, plural, dec) {
+  /* el número se redondea UNA vez y la palabra se deriva de ese mismo valor:
+     Math.round(-0.5) es -0 pero Math.round(Math.abs(-0.5)) es 1, y esa
+     discrepancia imprimía "1 puntos" y "2 punto". */
+  const v = dec == null ? Math.round(Math.abs(n)) : Number(Math.abs(n).toFixed(dec));
+  return (dec == null ? v : v.toFixed(dec)) + " " + plu(v, sing, plural);
+}
+
 /* ---------- utilidades de fecha ---------- */
 function addDaysIso(iso, n) { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function mondayOf(iso) { const d = new Date(iso + "T00:00:00Z"); const off = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - off); return d.toISOString().slice(0, 10); }
@@ -196,8 +211,8 @@ function weekFacts(w) {
   const facts = [];
   /* el rango real del informe: la semana en curso puede tener menos de 7 días */
   const nDays = Math.max(1, Math.round((new Date(w.end + "T00:00:00Z") - new Date(w.monIso + "T00:00:00Z")) / 86400000) + 1);
-  const spanTxt = nDays >= 7 ? "siete días" : nDays === 1 ? "el día anterior" : `${nDays} días`;
-  const agoTxt = nDays >= 7 ? "hace siete días" : nDays === 2 ? "el día anterior" : `hace ${nDays - 1} días`;
+  const spanTxt = nDays >= 7 ? "siete días" : nDays === 1 ? "el día anterior" : nplu(nDays, "día");
+  const agoTxt = nDays >= 7 ? "hace siete días" : nDays === 2 ? "el día anterior" : "hace " + nplu(nDays - 1, "día");
   const A = w.assets.find(x => x.t === "BTC") || w.assets[0];
   if (!A) return { anomaly: null, facts };
   const dPx = A.a.price ? (A.b.price / A.a.price - 1) * 100 : 0;
@@ -352,7 +367,7 @@ function weekAhead(w, cal) {
     lvl: v.rpLTH ? E.fmt.usd(v.rpLTH) : "—", lvlLab: "coste medio de los tenedores de años",
     body: `El ciclo cierra en ${zL.rank.toFixed(0)} de 100 (${zL.label.toLowerCase()})${v.nuplLTH != null ? ` con un ${(v.nuplLTH * 100).toFixed(0)}% de ganancia sin realizar` : ""}. ` +
       (v.rpLTH ? `Perder ${E.fmt.usd(v.rpLTH)} de forma sostenida sería el aviso de cambio estructural; mientras aguante, la fase no se rompe. ` : "") +
-      (gap >= 20 ? `Hoy los dos horizontes divergen ${gap.toFixed(0)} puntos, así que lo más probable es que el corto plazo corrija hacia el ciclo antes de que el ciclo siga al corto.`
+      (gap >= 20 ? `Hoy los dos horizontes divergen ${nplu(gap, "punto")}, así que lo más probable es que el corto plazo corrija hacia el ciclo antes de que el ciclo siga al corto.`
         : "Los dos horizontes van en la misma dirección, así que la semana no debería traer sorpresas de fondo."),
   });
 
@@ -381,8 +396,8 @@ function weekAhead(w, cal) {
 
   out.push({
     q: "¿Qué hay en el calendario que pueda mover el mercado?",
-    a: ev.length ? `${ev.length} evento${ev.length > 1 ? "s" : ""} en 7 días` : "Semana sin citas relevantes",
-    lvl: ev.length ? ev[0].event : "—", lvlLab: ev.length ? `el más próximo · en ${ev[0].days} día${ev[0].days === 1 ? "" : "s"}` : "sin eventos a 7 días",
+    a: ev.length ? `${nplu(ev.length, "evento")} en 7 días` : "Semana sin citas relevantes",
+    lvl: ev.length ? ev[0].event : "—", lvlLab: ev.length ? `el más próximo · en ${nplu(ev[0].days, "día")}` : "sin eventos a 7 días",
     body: (ev.length
       ? `Esta semana hay ${ev.map(e => `${e.event} (en ${e.days}d)`).join(", ")}. Los datos macro mueven el precio a corto plazo pero rara vez cambian la fase de ciclo: sirven para elegir el día de ejecutar, no para decidir si se ejecuta.`
       : "No hay citas macro ni vencimientos relevantes en los próximos 7 días, así que el precio debería responder sobre todo a los flujos on-chain.") +
@@ -440,7 +455,7 @@ function weekStory(w) {
   /* 1 · lo que pasó, en lenguaje de calle */
   blocks.push({
     h: "Lo primero: el precio",
-    p: `${A.t === "BTC" ? "Bitcoin" : "Ethereum"} ${dPx > 0 ? "subió" : dPx < 0 ? "bajó" : "acabó donde empezó"} ${mag < 0.5 ? "prácticamente nada" : `un ${mag.toFixed(1)}%`} ${nDays >= 7 ? "en la semana" : `en ${nDays} días`}, de ${E.fmt.usd(A.a.price)} a ${E.fmt.usd(A.b.price)}.` +
+    p: `${A.t === "BTC" ? "Bitcoin" : "Ethereum"} ${dPx > 0 ? "subió" : dPx < 0 ? "bajó" : "acabó donde empezó"} ${mag < 0.5 ? "prácticamente nada" : `un ${mag.toFixed(1)}%`} ${nDays >= 7 ? "en la semana" : "en " + nplu(nDays, "día")}, de ${E.fmt.usd(A.a.price)} a ${E.fmt.usd(A.b.price)}.` +
       (fuerte ? ` Un movimiento de esta talla no es rutina: son de los que cambian el ánimo del mercado y, con él, lo que conviene hacer.`
         : medio ? ` Es un movimiento normal: mueve el precio pero no la fase de fondo.`
           : ` Cuando el precio no va a ninguna parte, lo interesante está debajo: en quién compró y quién vendió mientras el gráfico se quedaba quieto.`) +
@@ -453,11 +468,11 @@ function weekStory(w) {
     concepto: "lectura",
     p: `La lectura pasó de ${pIni.toFixed(0)} a ${pFin.toFixed(0)} de 100. ` +
       (Math.abs(pFin - pIni) >= 15
-        ? `Un salto de ${Math.abs(pFin - pIni).toFixed(0)} puntos es mucho: el mercado cambió de sitio, no solo de precio.`
-        : `Se movió ${Math.abs(pFin - pIni).toFixed(0)} puntos, así que el terreno sigue siendo parecido.`) +
+        ? `Un salto de ${nplu(pFin - pIni, "punto")} es mucho: el mercado cambió de sitio, no solo de precio.`
+        : `Se movió ${nplu(pFin - pIni, "punto")}, así que el terreno sigue siendo parecido.`) +
       ` Bambu mide dos plazos por separado, y esta semana no dicen lo mismo: el corto plazo cerró en ${zS.rank.toFixed(0)} (${zS.label.toLowerCase()}) y el ciclo en ${zL.rank.toFixed(0)} (${zL.label.toLowerCase()}).` +
       (Math.abs(zS.rank - zL.rank) >= 20
-        ? ` Esa diferencia de ${Math.abs(zS.rank - zL.rank).toFixed(0)} puntos es la clave de la semana: hay recorrido de fondo, pero comprar hoy es comprar en un momento caliente. En la práctica significa repartir en tramos en lugar de entrar de golpe.`
+        ? ` Esa diferencia de ${nplu(zS.rank - zL.rank, "punto")} es la clave de la semana: hay recorrido de fondo, pero comprar hoy es comprar en un momento caliente. En la práctica significa repartir en tramos en lugar de entrar de golpe.`
         : ` Al ir los dos en la misma dirección, la lectura es más fiable de lo habitual.`),
   });
 
@@ -485,7 +500,7 @@ function weekStory(w) {
         (sL < 1
           ? `Siguen soltando por debajo de coste, y eso es agotamiento, no euforia: el que vende en pérdida después de años suele estar rindiéndose, y esa oferta se acaba.`
           : `Ya venden con beneficio, que es la manera educada de decir que están empezando a repartir. No es una alarma, pero sí el primer paso de la distribución.`) +
-        (sLa != null ? ` Hace ${nDays >= 7 ? "una semana" : nDays + " días"} estaba en ${sLa.toFixed(3)}: ${subiendo ? (sL < 1 ? "se están acercando a recuperar lo que pagaron, así que su pérdida se reduce" : "cada vez venden con más beneficio") : (sL < 1 ? "venden con más pérdida que antes, señal de que aún queda rendición por delante" : "su beneficio al vender se ha estrechado")}.` : ""),
+        (sLa != null ? ` Hace ${nDays >= 7 ? "una semana" : nplu(nDays, "día")} estaba en ${sLa.toFixed(3)}: ${subiendo ? (sL < 1 ? "se están acercando a recuperar lo que pagaron, así que su pérdida se reduce" : "cada vez venden con más beneficio") : (sL < 1 ? "venden con más pérdida que antes, señal de que aún queda rendición por delante" : "su beneficio al vender se ha estrechado")}.` : ""),
     });
   }
 
@@ -650,7 +665,7 @@ function InformeSemanal({ results, palette }) {
 
         {/* cifras de cabecera */}
         <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
-          <RepBox lab="Lectura del conjunto" val={posEnd.toFixed(0) + " /100"} sub={`media de ${w.assets.map(A => A.t).join(" y ")} · ${dTemp >= 0 ? "▲" : "▼"} ${Math.abs(dTemp).toFixed(0)} puntos`} color={tempCol} />
+          <RepBox lab="Lectura del conjunto" val={posEnd.toFixed(0) + " /100"} sub={`media de ${w.assets.map(A => A.t).join(" y ")} · ${dTemp >= 0 ? "▲" : "▼"} ${nplu(dTemp, "punto")}`} color={tempCol} />
           <RepBox lab="Fear & Greed" val={fg.value} sub={fg.label} color={E.tempColor(fg.value, palette)} />
           <RepBox lab="Ciclo halving" val={(now.progress * 100).toFixed(0) + "%"} sub={"día " + now.daysSince + " · " + now.daysUntil + "d al próximo"} />
           <RepBox lab="Tamaño de cada compra" val={"×" + DD.REGIMES[w.regime].mult.toFixed(2)} sub={w.regime + " · tendencia de medio plazo"} />
@@ -666,7 +681,7 @@ function InformeSemanal({ results, palette }) {
               </>
             : <>
                 <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35, letterSpacing: "-.01em" }}>Semana sin anomalías: nada se salió de su rango.</div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-2)", marginTop: 5 }}>La lectura cierra en {posEnd.toFixed(0)} de 100 tras moverse {Math.abs(dTemp).toFixed(0)} puntos, y ninguna métrica registró un movimiento fuera de lo habitual. Que no pase nada también es información: son las semanas en las que el plan se cumple sin tocarlo.</div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-2)", marginTop: 5 }}>La lectura cierra en {posEnd.toFixed(0)} de 100 tras moverse {nplu(dTemp, "punto")}, y ninguna métrica registró un movimiento fuera de lo habitual. Que no pase nada también es información: son las semanas en las que el plan se cumple sin tocarlo.</div>
               </>}
         </div>
 
@@ -807,7 +822,7 @@ function InformeSemanal({ results, palette }) {
             <div style={{ fontSize: 16, fontWeight: 700, color: macroCol, marginBottom: 4 }}>{now.macroPhase}</div>
             <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
               {now.athPassed
-                ? <>El ATH del ciclo se marcó el {C.fmtES(now.ath.d)} ({E.fmt.usd(now.ath.p)}), hace {now.daysSinceATH} días. Si se repite el patrón histórico (bear medio {C.avgBear}d), el suelo macro se proyecta hacia <strong>{C.fmtES(now.projBottom)}</strong> (~{Math.max(0, now.daysToProjBottom)}d). </>
+                ? <>El ATH del ciclo se marcó el {C.fmtES(now.ath.d)} ({E.fmt.usd(now.ath.p)}), hace {nplu(now.daysSinceATH, "día")}. Si se repite el patrón histórico (bear medio {C.avgBear}d), el suelo macro se proyecta hacia <strong>{C.fmtES(now.projBottom)}</strong> (~{Math.max(0, now.daysToProjBottom)}d). </>
                 : <>Aún no se confirma el ATH del ciclo; restan ~{now.daysToATH}d al pico según el patrón medio. </>}
               Próximo halving: <strong>{C.fmtES(now.nextH.date)}</strong> ({now.daysUntil}d).
             </p>
@@ -835,7 +850,7 @@ function InformeSemanal({ results, palette }) {
                   </div>
                   {a.count >= 2 && g
                     ? <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-2)" }}>
-                        En <strong>{a.count}</strong> episodios con MVRV-Z cercano ({(a.target - a.tol).toFixed(1)}–{(a.target + a.tol).toFixed(1)}), a 90 días el precio rindió en mediana <strong style={{ color: g.med >= 0 ? "var(--brand)" : "#A83C26" }}>{g.med >= 0 ? "+" : ""}{g.med.toFixed(0)}%</strong> (rango {g.min.toFixed(0)}% … {g.max.toFixed(0)}%){g6 ? <>; a 180 días, mediana <strong style={{ color: g6.med >= 0 ? "var(--brand)" : "#A83C26" }}>{g6.med >= 0 ? "+" : ""}{g6.med.toFixed(0)}%</strong></> : null}.
+                        En <strong>{a.count}</strong> {plu(a.count, "episodio")} con MVRV-Z cercano ({(a.target - a.tol).toFixed(1)}–{(a.target + a.tol).toFixed(1)}), a 90 días el precio rindió en mediana <strong style={{ color: g.med >= 0 ? "var(--brand)" : "#A83C26" }}>{g.med >= 0 ? "+" : ""}{g.med.toFixed(0)}%</strong> (rango {g.min.toFixed(0)}% … {g.max.toFixed(0)}%){g6 ? <>; a 180 días, mediana <strong style={{ color: g6.med >= 0 ? "var(--brand)" : "#A83C26" }}>{g6.med >= 0 ? "+" : ""}{g6.med.toFixed(0)}%</strong></> : null}.
                         {a.closest ? <> El análogo más cercano fue <strong>{mesAno(a.closest.iso)}</strong> (MVRV-Z {a.closest.val.toFixed(2)}), tras el cual subió <strong style={{ color: a.closest.fwd[90] >= 0 ? "var(--brand)" : "#A83C26" }}>{a.closest.fwd[90] >= 0 ? "+" : ""}{a.closest.fwd[90].toFixed(0)}%</strong> en 90 días.</> : null}
                       </p>
                     : <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-3)" }}>Sin suficientes episodios históricos comparables{tk === "ETH" ? " (ETH solo tiene datos desde 2015)" : ""}.</p>}
@@ -846,7 +861,7 @@ function InformeSemanal({ results, palette }) {
         </div>
 
         {/* Escenarios a 90 días */}
-        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".05em", margin: "2px 2px 10px" }}>Escenarios a 90 días · proyección sobre BTC desde {E.fmt.usd(btcPx)}{dist ? ` · ${dist.n} análogos, con el ciclo actual pesando ${(dist.wCurrent * 100).toFixed(0)}%` : ""}</div>
+        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".05em", margin: "2px 2px 10px" }}>Escenarios a 90 días · proyección sobre BTC desde {E.fmt.usd(btcPx)}{dist ? ` · ${nplu(dist.n, "análogo")}, con el ciclo actual pesando ${(dist.wCurrent * 100).toFixed(0)}%` : ""}</div>
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 4 }}>
           {scen.map((s, i) => (
             <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "14px 15px", borderTop: `4px solid ${s.col}` }}>
@@ -934,4 +949,4 @@ function RepBox({ lab, val, sub, color }) {
     </div>
   );
 }
-Object.assign(window, { SectionReporte, InformeSemanal, analogStats, scenarioDist });
+Object.assign(window, { plu, nplu, SectionReporte, InformeSemanal, analogStats, scenarioDist });

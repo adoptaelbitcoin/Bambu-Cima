@@ -10,6 +10,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 const NAVGROUPS = [
   { label: "Análisis", items: [
     { id: "resumen",  label: "Resumen",         icon: "resumen" },
+    { id: "detector", label: "Detector SOPR",    icon: "detector" },
     { id: "heatmap",  label: "Heatmap de zonas", icon: "heatmap" },
     { id: "historico",label: "Histórico",        icon: "historico" },
     { id: "ciclo",    label: "Ciclo Halving +", icon: "ciclo" },
@@ -36,6 +37,7 @@ const NAVGROUPS = [
 const TITLES = {
   resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
   heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
+  detector:["Detector bidireccional", "El termómetro del SOPR para BTC y ETH · dirección, intensidad y giro"],
   historico:["Histórico de datos", "Series diarias y comparativos BTC / ETH"],
   ciclo:   ["Ciclo Halving +", "Ciclos, fases alcistas/bajistas y proyección"],
   backtest:["Backtest & Estadísticas", "Puntos de inflexión + hit-rate, profit factor y resultados"],
@@ -186,6 +188,7 @@ function App() {
     switch (page) {
       case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} onGo={setPage} k={k} />;
       case "heatmap":  return <SectionHeatmap results={results} regime={regime} palette={palette} k={k} />;
+      case "detector": return <SectionDetector palette={palette} />;
       case "historico":return <SectionHistorico results={results} regime={regime} palette={palette} k={k}
                                 snapshots={snapshots} onSaveSnapshot={onSaveSnapshot} />;
       case "ciclo":    return <SectionCiclo palette={palette} />;
