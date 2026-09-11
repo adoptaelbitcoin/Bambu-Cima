@@ -259,7 +259,7 @@ function App() {
           </div>}
           <div className="tb-chip tb-hide-sm" style={{ background: mixSoft(mtCol), borderColor: mixSoft(mtCol, .6) }}>
             <span className="k">BTC+ETH</span>
-            <span className="v num" style={{ color: mtCol, whiteSpace: "nowrap" }}>ciclo {barLth.toFixed(0)} · corto {barSth.toFixed(0)}</span>
+            <span className="v num" style={{ color: E.inkColor(mtCol, 4.5, "#F0F4F5"), whiteSpace: "nowrap" }}>ciclo {barLth.toFixed(0)} · corto {barSth.toFixed(0)}</span>
           </div>
           <div className="tb-chip tb-hide-sm" title="Fecha del último dato on-chain real (ChartInspect)">
             <span className="k">Actualizado</span>

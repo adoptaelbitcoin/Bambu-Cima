@@ -34,12 +34,8 @@ function UpdateNotice() {
   );
 }
 
-/* veredicto llano por temperatura */
-function verdictWord(temp) {
-  if (temp < 40) return { w: "ACUMULAR", plain: "barato", kind: "acc" };
-  if (temp < 60) return { w: "MANTENER", plain: "neutral", kind: "neu" };
-  return { w: "REDUCIR", plain: "caro", kind: "dist" };
-}
+/* veredicto llano · derivado del motor para no divergir de los cortes reales */
+function verdictWord(rank) { return E.verdictFromRank(rank); }
 
 /* modelo de asignación Núcleo (LTH) / Bolsa de oportunidad (STH) */
 const PROFILES = {
@@ -54,6 +50,9 @@ function allocFor(res, profile, total, weight) {
   res.forEach(r => {
     const w = (r.asset.type === "BTC" ? weight : 100 - weight) / 100;
     const lthT = r.lth.temp, sthT = r.sth.temp, price = r.vals.price;
+    const H = window.BambuHistory, t = r.asset.type;
+    const lthR = H && H.zoneOf ? H.zoneOf(lthT, t, "lth", 27).rank : lthT;
+    const sthR = H && H.zoneOf ? H.zoneOf(sthT, t, "sth", 27).rank : sthT;
     const coreExpo = clamp(100 - lthT * 0.55, 45, 100) / 100;   // núcleo: expuesto casi siempre, baja en euforia
     const tacExpo = clamp(108 - sthT * 1.18, 0, 100) / 100;     // táctica: fuera en caliente, dentro en frío
     const coreCap = total * (1 - tacFrac) * w;
@@ -63,8 +62,8 @@ function allocFor(res, profile, total, weight) {
       coreCap, tacCap,
       coreInv: coreCap * coreExpo, coreCash: coreCap * (1 - coreExpo), coreExpo,
       tacInv: tacCap * tacExpo, tacCash: tacCap * (1 - tacExpo), tacExpo,
-      coreV: verdictWord(lthT), tacV: verdictWord(sthT),
-      lthT, sthT,
+      coreV: verdictWord(lthR), tacV: verdictWord(sthR),
+      lthT, sthT, lthR, sthR,
     };
   });
   const coreTot = Object.values(out).reduce((a, x) => a + x.coreCap, 0);
@@ -149,7 +148,8 @@ const PICONS = {
   dca: "M12 3v4M12 17v4M5 12h14M8 8l-3 4 3 4M16 8l3 4-3 4",
   heatmap: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z", macro: "M12 3v18M5 8l7-5 7 5M5 12h14",
   ciclo: "M21 12a9 9 0 1 1-3-6.7M21 4v4h-4", onchain: "M4 19V5m0 14h16M8 15l3-4 3 2 4-6",
-  backtest: "M4 4v16h16M8 14l3-4 3 3 4-6", historial: "M4 5h16M4 10h16M4 15h10M4 20h6", reporte: "M7 3h10l3 3v15H7zM14 3v4h4M10 13h6M10 17h6",
+  backtest: "M4 4v16h16M8 14l3-4 3 3 4-6", historial: "M4 5h16M4 10h16M4 15h10M4 20h6",
+  ciclosz: "M3 12a9 9 0 0 1 9-9M21 12a9 9 0 0 1-9 9M12 3l3 3-3 3M12 21l-3-3 3-3", reporte: "M7 3h10l3 3v15H7zM14 3v4h4M10 13h6M10 17h6",
   salida: "M14 4h5v16h-5M10 8l4 4-4 4M14 12H3",
   guia: "M12 7a3 3 0 1 1 2 5c-1 .6-2 1-2 2M12 18h.01",
 };
@@ -201,6 +201,7 @@ function App() {
       { id: "reporte", label: "Reporte 360" },
     ]},
     { label: "Tu estructura", items: [
+      { id: "ciclosz", label: "Ciclos de zona" },
       { id: "plan", label: "DCA inteligente" },
       { id: "salida", label: "Plan de salida" },
     ]},
@@ -218,6 +219,7 @@ function App() {
     onchain: ["On-chain+", "Cohortes, flujos y ballenas en detalle"],
     backtest: ["Backtest & Stats", "Qué tan fiable ha sido el modelo"],
     historial: ["Historial de lecturas", "Qué habría dicho Bambu cada día desde 2017"],
+    ciclosz: ["Ciclos de zona", "Backtest DCA: 1.000 USD por ciclo, comprando en suelo y vendiendo en techo"],
     reporte: ["Reporte 360", "Tu informe completo, semanal y on-chain"],
     guia: ["Cómo usar Bambu", "Guía paso a paso"],
   };
@@ -247,7 +249,7 @@ function App() {
 
   const AssetPlan = ({ type }) => {
     const a = alloc.out[type]; if (!a) return null;
-    const stop = E.sizing(a.r.sth.signal, regime, a.price).stopUsd;
+    const stop = E.sizing(E.signalForRank(a.sthR != null ? a.sthR : a.r.sth.temp), regime, a.price).stopUsd;
     return (
       <div style={{ background: "var(--card)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14 }}>
@@ -463,12 +465,13 @@ function App() {
         </div>
       );
       case "salida": return pageSalida;
-      case "resumen": return <SectionResumen results={results} regime={regime} palette={PAL} onGo={setPage} />;
+      case "resumen": return <SectionResumen results={results} regime={regime} palette={PAL} onGo={setPage} k={27} />;
       case "heatmap": return <SectionHeatmap results={results} regime={regime} palette={PAL} k={27} />;
       case "ciclo": return <SectionCiclo palette={PAL} />;
       case "onchain": return <SectionOnchain results={results} palette={PAL} k={27} />;
       case "macro": return <SectionMacro results={results} palette={PAL} />;
       case "historial": return <SectionHistorial palette={PAL} />;
+      case "ciclosz": return <SectionCiclosZona palette={PAL} k={27} />;
       case "backtest": return (
         <div>
           <SectionBacktest palette={PAL} k={27} assets={assets} />

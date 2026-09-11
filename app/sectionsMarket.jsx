@@ -26,16 +26,19 @@ function tacticalRead(structTemp, fgVal, mom7, liq, palette) {
 function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
   const v = tacticalRead(structTemp, fgVal, mom7, liq, palette);
   const col = E.tempColor(v.temp, palette);
+  const ink = E.inkColor(col, 3);                  // titulares
+  const inkSm = E.inkColor(col, 4.5);              // texto normal
   const stops = (DD.PALETTES[palette] || DD.PALETTES.sobria).stops;
   const grad = "linear-gradient(90deg," + stops.map(s => `${s[1]} ${s[0]}%`).join(",") + ")";
   const sz = window.BambuHistory.zoneOf(structTemp, (results[0]&&results[0].asset?results[0].asset.type:"BTC"), "lth");
-  const execCol = v.exec.startsWith("Sí") ? E.tempColor(v.temp < 50 ? 18 : 88, palette) : v.exec === "Con cautela" ? E.tempColor(40, palette) : "var(--ink-2)";
+  const execCol = v.exec.startsWith("Sí") ? E.inkColor(E.tempColor(v.temp < 50 ? 18 : 88, palette), 3)
+                : v.exec === "Con cautela" ? E.inkColor(E.tempColor(40, palette), 3) : "var(--ink-2)";
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: `6px solid ${col}`, padding: 0, overflow: "hidden" }}>
       <div className="grid" style={{ gridTemplateColumns: "1.7fr 1fr 1.3fr", gap: 0 }}>
         <div style={{ padding: "18px 22px" }}>
           <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".14em" }}>Lectura táctica · ahora mismo</div>
-          <div style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-.02em", color: col, lineHeight: 1.08, marginTop: 6 }}>{v.stance}</div>
+          <div style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-.02em", color: ink, lineHeight: 1.08, marginTop: 6 }}>{v.stance}</div>
           <div style={{ fontSize: 13.5, fontWeight: 500, marginTop: 6, color: "var(--ink-2)", lineHeight: 1.45 }}>{v.action}</div>
           {/* espectro con dos marcadores: estructura (on-chain) y sentimiento (F&G) */}
           <div style={{ marginTop: 16, height: 8, borderRadius: 5, background: grad, position: "relative" }}>
@@ -51,7 +54,7 @@ function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
           <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em" }}>¿Ejecutar ahora?</div>
           <div style={{ fontSize: 23, fontWeight: 700, color: execCol, lineHeight: 1.1, marginTop: 4 }}>{v.exec}</div>
           <div className="tiny" style={{ marginTop: 6 }}>
-            <span className="badge" style={{ background: mixSoft(v.aligned ? E.tempColor(v.temp, palette) : E.tempColor(50, palette)), color: v.aligned ? E.tempColor(v.temp, palette) : "var(--ink-2)", fontWeight: 700 }}>
+            <span className="badge" style={{ background: mixSoft(v.aligned ? E.tempColor(v.temp, palette) : E.tempColor(50, palette)), color: v.aligned ? inkSm : "var(--ink-2)", fontWeight: 700 }}>
               {v.aligned ? "Estructura y ánimo alineados" : "Divergen → cautela"}
             </span>
           </div>
@@ -64,7 +67,7 @@ function MarketTactical({ structTemp, fgVal, fgLabel, mom7, liq, palette }) {
               `Sentimiento Fear & Greed ${fgVal} · ${fgLabel}.`,
               `Momentum BTC ${mom7 >= 0 ? "+" : ""}${(mom7 * 100).toFixed(1)}% en 7 días.`,
               v.liqNote,
-            ].map((r, i) => <li key={i} style={{ fontSize: 11.5, lineHeight: 1.42, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: col, fontWeight: 700 }}>›</span>{r}</li>)}
+            ].map((r, i) => <li key={i} style={{ fontSize: 11.5, lineHeight: 1.42, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: inkSm, fontWeight: 700 }}>›</span>{r}</li>)}
           </ul>
         </div>
       </div>
@@ -342,7 +345,9 @@ function SectionMacro({ results, palette }) {
   const cal = X.calendar();
   const s = X.sentiment;
   const impactColor = { alto: "#C0492E", medio: "#D69A40", bajo: "#9AA0A8" };
-  const socialCol = E.tempColor(s.social, palette);
+  const socialCol = E.tempColor(s.social, palette);          // relleno
+  const socialInk = E.inkColor(socialCol, 3);                 // tinta de titular
+  const socialInkSm = E.inkColor(socialCol, 4.5, "#F2F4F5");  // tinta sobre la insignia
 
   /* La estructura se mide en la escala publicada: cada horizonte contra su propia
    distribución y se promedian los ranks, igual que el termómetro y marketVerdict.
@@ -352,7 +357,9 @@ function SectionMacro({ results, palette }) {
     ? results.reduce((acc, r) => acc + (window.BambuHistory.zoneOf(r.sth.temp, r.asset.type, "sth", 27).rank + window.BambuHistory.zoneOf(r.lth.temp, r.asset.type, "lth", 27).rank) / 2, 0) / results.length
     : ((results && results.length) ? marketTemp(results) : 50);
   const mv = macroVerdict(structTemp, s, cal);
-  const mvCol = E.tempColor(mv.temp, palette);
+  const mvCol = E.tempColor(mv.temp, palette);       // relleno del borde
+  const mvInk = E.inkColor(mvCol, 3);                // tinta del titular
+  const mvInkSm = E.inkColor(mvCol, 4.5);            // tinta de apoyo
   const reasons = [
     mv.next ? `Próximo catalizador: ${mv.next.event} en ${mv.next.days}d (impacto ${mv.next.impact}).` : null,
     `Sentimiento social ${s.social} · ${s.socialLabel}.`,
@@ -369,16 +376,16 @@ function SectionMacro({ results, palette }) {
         <div className="grid" style={{ gridTemplateColumns: "1.7fr 1.3fr", gap: 0 }}>
           <div style={{ padding: "18px 22px" }}>
             <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".14em" }}>Conclusión · qué hacer con esto</div>
-            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", color: mvCol, lineHeight: 1.1, marginTop: 6 }}>{mv.stance}</div>
+            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", color: mvInk, lineHeight: 1.1, marginTop: 6 }}>{mv.stance}</div>
             <div style={{ fontSize: 14, fontWeight: 500, marginTop: 7, color: "var(--ink-2)", lineHeight: 1.5 }}>{mv.action}</div>
             <div style={{ marginTop: 12 }}>
-              <span className="badge" style={{ background: mixSoft(mvCol), color: mvCol, fontWeight: 700, letterSpacing: ".04em" }}>{mv.sesgo}</span>
+              <span className="badge" style={{ background: mixSoft(mvCol), color: mvInkSm, fontWeight: 700, letterSpacing: ".04em" }}>{mv.sesgo}</span>
             </div>
           </div>
           <div style={{ padding: "16px 22px", borderLeft: "1px solid var(--border)" }}>
             <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 7 }}>En qué se apoya</div>
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-              {reasons.map((r, i) => <li key={i} style={{ fontSize: 12, lineHeight: 1.45, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: mvCol, fontWeight: 700 }}>›</span>{r}</li>)}
+              {reasons.map((r, i) => <li key={i} style={{ fontSize: 12, lineHeight: 1.45, color: "var(--ink-2)", display: "flex", gap: 6 }}><span style={{ color: mvInkSm, fontWeight: 700 }}>›</span>{r}</li>)}
             </ul>
           </div>
         </div>
@@ -402,18 +409,71 @@ function SectionMacro({ results, palette }) {
           </table>
         </Card>
 
-        <Card title="Sentimiento agregado" sub="Social · funding · opciones">
-          <div className="gauge-wrap">
-            <ThermoGauge temp={s.social} palette={palette} size={220} />
-            <div className="gauge-read"><div className="gauge-temp" style={{ color: socialCol }}>{s.social}</div><div className="gauge-zone" style={{ color: socialCol }}>{s.socialLabel}</div></div>
+        <Card title={<>Sentimiento agregado <HelpDot term="Qué mide el sentimiento" def="Combina lo que dice la gente (social), lo que paga el apalancamiento (funding), cómo se cubre el mercado de opciones (put/call) y el sesgo de las posiciones abiertas. Es un contrapeso a la lectura on-chain: cuando el sentimiento está eufórico y la cadena fría, suele ganar la cadena; cuando ambos coinciden, la lectura es más fiable." /></>} sub="Social · funding · opciones · posicionamiento" pad={false}>
+          {/* cifra y barra, sin el hueco muerto del semicírculo */}
+          <div style={{ padding: "16px 18px 14px" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
+              <div>
+                <div className="num" style={{ fontSize: 42, fontWeight: 700, lineHeight: 1, color: socialInk, letterSpacing: "-.02em" }}>{s.social}<span style={{ fontSize: 17, fontWeight: 500, color: "var(--ink-3)" }}> /100</span></div>
+              </div>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <span className="badge" style={{ background: mixSoft(socialCol), color: socialInkSm, fontWeight: 700 }}>{s.socialLabel}</span>
+              </div>
+            </div>
+            <div style={{ position: "relative", height: 12, borderRadius: 6, marginTop: 12, overflow: "hidden",
+                          background: `linear-gradient(90deg, ${(DD.PALETTES[palette] || DD.PALETTES.sobria).stops.map(st => `${st[1]} ${st[0]}%`).join(", ")})` }}>
+              <div style={{ position: "absolute", left: s.social + "%", top: -2, transform: "translateX(-50%)", width: 3, height: 16, background: "var(--ink)", borderRadius: 2 }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+              <span className="tiny muted">0 · miedo extremo</span>
+              <span className="tiny muted">100 · euforia</span>
+            </div>
           </div>
-          <div className="divider" style={{ margin: "12px 0" }} />
-          {s.sources.map(src => (
-            <BarRow key={src.name} label={src.name} value={src.value} max={100} color={E.tempColor(src.value, palette)} right={src.value} />
-          ))}
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
-            <div style={{ background: "var(--surface-3)", borderRadius: 8, padding: "9px 12px" }}><div className="tiny muted">Funding medio</div><div className="num" style={{ fontWeight: 600 }}>{s.fundingAvg}%</div></div>
-            <div style={{ background: "var(--surface-3)", borderRadius: 8, padding: "9px 12px" }}><div className="tiny muted">Put/Call</div><div className="num" style={{ fontWeight: 600 }}>{s.putCall}</div></div>
+
+          {/* componentes, cada uno con su sesgo declarado */}
+          <div style={{ borderTop: "1px solid var(--border)", padding: "12px 18px" }}>
+            {s.sources.map(src => {
+              const col = E.tempColor(src.value, palette);       // relleno de la barra
+              const ink = E.inkColor(col, 4.5);                   // tinta de la cifra
+              const sesgo = src.value >= 58 ? "empuja al alza" : src.value <= 42 ? "empuja a la baja" : "neutral";
+              return (
+                <div key={src.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+                  <span style={{ flex: 1, minWidth: 118, fontSize: 12.5, fontWeight: 500 }}>{src.name}</span>
+                  <div style={{ flex: 1.1, minWidth: 70, height: 8, background: "var(--surface-3)", borderRadius: 5, overflow: "hidden" }}>
+                    <div style={{ width: src.value + "%", height: "100%", background: col }} />
+                  </div>
+                  <span className="num" style={{ width: 26, textAlign: "right", fontSize: 13, fontWeight: 700, color: ink }}>{src.value}</span>
+                  <span className="tiny muted" style={{ width: 92, textAlign: "right" }}>{sesgo}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 0, borderTop: "1px solid var(--border)" }}>
+            <div style={{ padding: "11px 18px" }}>
+              <div className="tiny muted">Funding medio</div>
+              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.fundingAvg}%</div>
+              <div className="tiny muted" style={{ marginTop: 2 }}>{s.fundingLabel}</div>
+            </div>
+            <div style={{ padding: "11px 18px", borderLeft: "1px solid var(--border)" }}>
+              <div className="tiny muted">Put/Call</div>
+              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.putCall}</div>
+              <div className="tiny muted" style={{ marginTop: 2 }}>{s.putCallLabel}</div>
+            </div>
+          </div>
+
+          {/* la conclusión: sentimiento contra cadena */}
+          <div style={{ padding: "13px 18px", borderTop: "1px solid var(--border)", background: "var(--surface-2, #F2F6F2)" }}>
+            <div className="tiny" style={{ textTransform: "uppercase", letterSpacing: ".1em", fontWeight: 700, color: E.inkColor(socialCol, 4.5, "#FAFBF8"), marginBottom: 5 }}>Qué implica</div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.6, color: "var(--ink-2)" }}>
+              {(() => {
+                const brecha = s.social - structTemp;
+                const coincide = Math.abs(brecha) < 12;
+                if (coincide) return `El sentimiento (${s.social}) y la estructura on-chain (${structTemp.toFixed(0)}) apuntan al mismo sitio, así que la lectura del día gana fiabilidad: no hay divergencia entre lo que la gente siente y lo que hace con sus monedas.`;
+                if (brecha > 0) return `El sentimiento (${s.social}) va ${nplu(brecha, "punto")} por encima de la estructura on-chain (${structTemp.toFixed(0)}): el ánimo corre más que los datos de cadena. Históricamente en estos desajustes acaba mandando la cadena, así que conviene no dejarse llevar por el optimismo del mercado.`;
+                return `El sentimiento (${s.social}) va ${nplu(brecha, "punto")} por debajo de la estructura on-chain (${structTemp.toFixed(0)}): hay más miedo del que justifican los datos de cadena. Ese desajuste suele preceder a las mejores ventanas de acumulación, aunque exige paciencia.`;
+              })()}
+            </div>
           </div>
         </Card>
       </div>

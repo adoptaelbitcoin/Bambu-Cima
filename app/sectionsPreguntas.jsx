@@ -126,7 +126,7 @@ function qsLTH(r, z, other, v, E, regime, capPct, mv, tkLabel) {
     tone: z.rank > 60 ? "hot" : z.rank < 40 ? "cold" : "mid",
     body: (z.rank > 80 ? "La lectura está en la franja donde los ciclos anteriores hicieron techo: la prioridad es vender por tramos, no acertar el máximo. "
       : z.rank > 60 ? "Entrando en la franja alta: es el momento de empezar a soltar por tramos, sin esperar la cifra redonda. "
-        : `Faltan ${window.nplu ? window.nplu(80 - z.rank, "punto") : (80 - z.rank).toFixed(0) + " puntos"} para la franja de distribución (80 de 100). `) +
+        : `Faltan ${nplu(80 - z.rank, "punto")} para la franja de distribución (80 de 100). `) +
       "Deja los niveles y los porcentajes escritos hoy, mientras la cabeza está fría: el plan de salida es lo que evita decidir con el precio en la cara.",
     go: "salida", goLab: "Definir mi plan de salida",
   });

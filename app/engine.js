@@ -4,6 +4,30 @@
    ============================================================ */
 (function () {
   "use strict";
+
+  /* ---------- pluralización ----------
+     Vive aquí, en el motor que cargan todas las suites, para que cualquier
+     sección pueda usarla sin guardas: tenerla en sectionsReport.jsx rompía
+     las páginas que no cargan ese archivo. */
+  function plu(n, sing, plural) {
+    if (Math.abs(n) === 1) return sing;
+    if (plural) return plural;
+    /* plural español, para que "mes" no acabe en "mess" ni "operación" en
+       "operacións": los call sites pueden seguir pasando el plural a mano. */
+    const s = String(sing);
+    if (/ión$/.test(s)) return s.replace(/ión$/, "iones");
+    if (/[aeiouáéíóú]$/i.test(s)) return s + "s";
+    if (/z$/i.test(s)) return s.replace(/z$/i, "ces");
+    return s + "es";
+  }
+  function nplu(n, sing, plural, dec) {
+    /* el número se redondea UNA vez y la palabra sale de ese mismo valor:
+       Math.round(-0.5) es -0 pero Math.round(Math.abs(-0.5)) es 1, y esa
+       discrepancia imprimía "1 puntos" y "2 punto". */
+    const v = dec == null ? Math.round(Math.abs(n)) : Number(Math.abs(n).toFixed(dec));
+    return (dec == null ? v : v.toFixed(dec)) + " " + plu(v, sing, plural);
+  }
+
   const D = window.BambuData;
 
   /* ---------- utilidades de color ---------- */
@@ -38,6 +62,33 @@
     const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
     return L > 0.42 ? "#1C2421" : "#FFFFFF";
   }
+  /* ---------- tinta legible a partir del color de relleno ----------
+     tempColor() está diseñada para RELLENOS (barras, celdas, insignias con
+     mixSoft), donde el color va de fondo. Como texto sobre fondo claro su
+     banda central no llega al mínimo de contraste, así que inkColor oscurece
+     el mismo matiz hasta alcanzar la ratio pedida: conserva el color de la
+     zona y se puede leer. ratio 4.5 para texto normal, 3 para titulares. */
+  function _lum(hex) {
+    const [r, g, b] = hexToRgb(hex).map(v => {
+      v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function contrast(hex, bgHex) {
+    const a = _lum(hex), b = _lum(bgHex || "#FFFFFF");
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }
+  function inkColor(hex, ratio, bgHex) {
+    const target = ratio || 4.5, bg = bgHex || "#FFFFFF";
+    let out = hex;
+    for (let i = 0; i < 24 && contrast(out, bg) < target; i++) out = mix(out, "#0B1512", 0.08);
+    return out;
+  }
+  /* atajo: tinta para una temperatura de la escala */
+  function tempInk(temp, paletteKey, ratio, bgHex) {
+    return inkColor(tempColor(temp, paletteKey), ratio, bgHex);
+  }
+
   function mix(hex, withHex, f) {
     const a = hexToRgb(hex), b = hexToRgb(withHex);
     return rgbToHex(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f);
@@ -174,8 +225,10 @@
     return { results, regime };
   }
 
+  window.plu = plu; window.nplu = nplu;
+
   window.BambuEngine = {
-    tempColor, readableText, mix, hexToRgb,
+    tempColor, readableText, mix, hexToRgb, inkColor, tempInk, contrast,
     metricValue, metricScore, horizonResult,
     signalFor, signalForRank, verdictFromRank, temperature, zoneFor, detectRegime,
     computeAsset, computeAll, sizing,

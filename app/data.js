@@ -70,6 +70,11 @@
     cdd:      v => v > 3 ? -1 : v > 2 ? -0.5 : v < 0.5 ? 0.5 : 0,
     funding:  v => v < -0.01 ? 1 : v < 0 ? 0.5 : v > 0.025 ? -1 : v > 0.015 ? -0.5 : 0,
     netflow:  v => v < -1000 ? 1 : v < 0 ? 0.5 : v > 5000 ? -1 : v > 0 ? -0.5 : 0,
+    /* ETH no tiene serie de saldos de exchange. La pregunta que contestaba el
+       netflow —¿la oferta pasa a manos que no venden?— se responde con el cambio
+       de la oferta en manos de largo plazo. Cortes sobre el histórico de ETH:
+       mediana 0%, p20 −2,1%, p80 +2,9%. */
+    lthNet30: v => v > 3 ? 1 : v > 1 ? 0.5 : v < -3 ? -1 : v < -1 ? -0.5 : 0,
     doi:      v => v > 20 ? -1 : v > 4.5 ? -0.5 : v < -15 ? 0.5 : 0,
     emaPct:   v => v < -20 ? 1 : v < -10 ? 0.5 : v > 25 ? -1 : v > 15 ? -0.5 : 0,
     bb:       v => v < 0 ? 1 : v < 0.15 ? 0.5 : v > 1 ? -1 : v > 0.85 ? -0.5 : 0,
@@ -81,8 +86,14 @@
     nuplLTH:  v => v < 0 ? 1 : v > 0.45 ? -1 : v > 0.3 ? -0.5 : 0,
     mvrvZ:    v => v < 1.5 ? 1 : v > 7 ? -1 : v > 5 ? -0.5 : 0,
     rhodl:    v => v > 150000 ? -1 : v > 100000 ? -0.5 : 0,
+    /* ETH vive en otra escala: máx histórico 24.7k (2017), pico 2021 9.8k, 2025 5.0k.
+       Con los cortes de BTC (150k/100k) la métrica nunca puntuaba en ETH. */
+    rhodlETH: v => v > 6000 ? -1 : v > 4000 ? -0.5 : 0,
     reserve:  v => v < 0.002 ? 1 : v < 0.004 ? 0.5 : v > 0.02 ? -1 : v > 0.012 ? -0.5 : 0,
     lthSup:   v => v > 64 ? 1 : v < 60 ? -1 : v < 63 ? -0.5 : 0,
+    /* ETH sí tiene serie real de oferta LTH, en otra escala: mediana histórica
+       69%, p25 61%, p75 76%. Los cortes de BTC no le sirven. */
+    lthSupETH: v => v > 76 ? 1 : v < 62 ? -1 : v < 69 ? -0.5 : 0,
     asopr:    v => v < 0.99 ? 1 : v < 1 ? 0.5 : v > 1.08 ? -1 : v > 1.05 ? -0.5 : 0,
     mayer:    v => v < 0.7 ? 1 : v < 0.85 ? 0.5 : v > 1.5 ? -1 : 0,
     picycle:  v => v >= 1 ? -1 : v > 0.9 ? -0.5 : 0,
@@ -110,7 +121,7 @@
           { key: "netEmS",  label: "ETH Net Emission % YoY", tech: "Net Emission % YoY", unit: "%", group: "liq", score: S.netEmis, read: "<0 deflación (EIP-1559)", src: "ultrasound.money" },
           { key: "ssr",     label: "SSR · Stablecoin Supply Ratio", tech: "SSR", unit: "", group: "liq", score: S.ssr, read: "<5 polvo seco · >18 capital escaso", src: "cryptoquant.com" },
           { key: "funding", label: "Funding Rate 30d MA", tech: "Funding 30d MA", unit: "%", group: "liq", score: S.funding, read: ">0.025% euforia sostenida", src: "coinglass.com" },
-          { key: "netflow", label: "Exchange Netflow 7d", tech: "Exchange Netflow 7d", unit: "", group: "liq", score: S.netflow, read: "Negativo = acumulación", src: "coinank.com" },
+          { key: "lthNet30", label: "Δ Oferta LTH 30d", tech: "HODLer Net Position Change 30d", unit: "%", group: "liq", score: S.lthNet30, read: "> +3% acumulación · < −3% distribución", src: "derivado de LTH Supply" },
           { key: "doi",     label: "Δ Open Interest 7d", tech: "Δ OI 7d", unit: "%", group: "liq", score: S.doi, read: ">20% apalancamiento peligroso", src: "coinglass.com" },
         ]
       : [
@@ -133,12 +144,14 @@
       { key: "lthSopr", label: "LTH-SOPR 7d MA", tech: "LTH-SOPR 7d MA", unit: "", group: "val", score: S.lthSopr, read: ">5 LTHs vendiendo ganancias", src: "cryptoquant.com" },
       { key: "nuplLTH", label: "NUPL LTH", tech: "NUPL LTH", unit: "", group: "val", score: S.nuplLTH, read: ">0.75 euforia · <0 capitulación", src: "lookintobitcoin.com" },
       { key: "mvrvZ",   label: "MVRV Z-Score", tech: "MVRV Z-Score", unit: "", group: "val", score: S.mvrvZ, read: ">7 techo · <0 suelo", src: "lookintobitcoin.com" },
-      { key: "rhodl",   label: "RHODL Ratio", tech: "RHODL Ratio", unit: "", group: "val", score: S.rhodl, read: ">150k euforia ciclo", src: "lookintobitcoin.com" },
+      { key: "rhodl",   label: "RHODL Ratio", tech: "RHODL Ratio", unit: "", group: "val", score: eth ? S.rhodlETH : S.rhodl, read: eth ? ">6k euforia ciclo · escala ETH" : ">150k euforia ciclo", src: "lookintobitcoin.com" },
     ];
 
     const lthCoh = [
       { key: "reserve",  label: "Reserve Risk", tech: "Reserve Risk", unit: "", group: "coh", score: S.reserve, read: "<0.002 oportunidad · >0.020 euforia", src: "lookintobitcoin.com" },
-      { key: "lthSup",   label: "LTH Supply % del total", tech: "LTH Supply %", unit: "%", group: "coh", score: S.lthSup, read: ">70 acumulación · <60 distribución", src: "glassnode.com" },
+      eth
+        ? { key: "lthSupplyPct", label: "LTH Supply % del total", tech: "LTH Supply %", unit: "%", group: "coh", score: S.lthSupETH, read: ">76 acumulación · <62 distribución · escala ETH", src: "ChartInspect/CSV" }
+        : { key: "lthSup", label: "LTH Supply % del total", tech: "LTH Supply %", unit: "%", group: "coh", score: S.lthSup, read: ">70 acumulación · <60 distribución", src: "glassnode.com" },
       { key: "asopr",    label: "aSOPR (Adjusted SOPR)", tech: "aSOPR", unit: "", group: "coh", score: S.asopr, read: "<1 capitulación · >1.05 toma ganancias", src: "glassnode.com" },
     ];
 
@@ -174,27 +187,32 @@
     };
   }
 
-  /* ---------- Valores precargados (Excel v2.2) ---------- */
+  /* ---------- Valores precargados (Excel v2.2) ----------
+     Solo campos con serie real detrás. Los que no la tienen —SSR, funding,
+     Δ open interest, Reserve Risk, LTH Supply % de BTC, RHODL de BTC, emisión
+     neta de ETH— se han retirado: como valor fijo puntuaban 0 y diluían el
+     composite hacia el centro fingiendo cobertura. Ahora el motor los declara
+     ausentes y renormaliza los pesos sobre lo que sí se mide. */
   const PRELOAD = {
     BTC: {
-      price: 95000,
-      rpSTH: 93000, sthSopr: 1.002, nuplSTH: 0.12,
-      ssr: 10, cdd: 3, funding: 0.007, netflow: -2800, doi: 5,
+      price: 77036,
+      rpSTH: 71126, sthSopr: 1.002, nuplSTH: 0.12,
+      cdd: 3, netflow: -2800,
       ema1d: 13, bb1d: 0.55, rsi1d: 54,
-      rpLTH: 38000, lthSopr: 2.4, nuplLTH: 0.5, mvrvZ: 2.7, rhodl: 30000,
-      reserve: 0.005, lthSup: 67, asopr: 1.01,
+      rpLTH: 38000, lthSopr: 2.4, nuplLTH: 0.5, mvrvZ: 2.7,
+      asopr: 1.01,
       mayer: 1.7, picycle: 0.7, ma2y: 1.8,
       puell: 1.5, ema1w: 111, bb1w: 0.65, rsi1w: 58,
     },
     ETH: {
-      price: 2400,
-      rpSTH: 2300, sthSopr: 1.002, nuplSTH: 0.08,
-      netEmS: 0.28, ssr: 10, funding: 0.005, netflow: -9500, doi: 4,
+      price: 2467,
+      rpSTH: 2146, sthSopr: 1.002, nuplSTH: 0.08,
+      lthNet30: 0.39,
       ema1d: 3, bb1d: 0.45, rsi1d: 47,
-      rpLTH: 1600, lthSopr: 1.3, nuplLTH: 0.28, mvrvZ: 1, rhodl: 30000,
-      reserve: 0.005, lthSup: 65, asopr: 1.005,
+      rpLTH: 1600, lthSopr: 1.3, nuplLTH: 0.28, mvrvZ: 1, rhodl: 564.58,
+      lthSupplyPct: 78.89, asopr: 1.005,
       mayer: 1.2, picycle: 0.7, ma2y: 1.5,
-      netEmL: 0.28, ema1w: 40, bb1w: 0.5, rsi1w: 48,
+      ema1w: 40, bb1w: 0.5, rsi1w: 48,
     },
   };
 
@@ -217,11 +235,27 @@
     const base = (PRELOAD[type] || PRELOAD.BTC);
     return row ? { ...base, ...row } : { ...base };
   }
+  /* La última fila real tiene huecos: cada fuente on-chain publica con su propio
+     retraso (RHODL de ETH va ~1 mes por detrás, netflow de BTC otro tanto). Antes
+     esos huecos caían al PRELOAD estático, que en ETH metía un RHODL de escala BTC
+     (30.000 frente a los ~565 reales). Se arrastra el último valor real de cada
+     columna, con tope de 90 días para no colar datos viejos. */
+  const FILL_MAX_DIAS = 90;
+  function lastRealRow(R) {
+    const row = R.rowAt(R.count - 1);
+    R.fields.forEach(f => {
+      if (row[f] != null) return;
+      const col = R.cols[f]; if (!col) return;
+      const min = Math.max(0, R.count - 1 - FILL_MAX_DIAS);
+      for (let i = R.count - 1; i >= min; i--) if (col[i] != null) { row[f] = col[i]; break; }
+    });
+    return row;
+  }
   function freshAssets() {
     return ASSETS_INIT.map(a => {
       const R = typeof window !== "undefined" && window.BambuRealData && window.BambuRealData[a.type];
       if (!R || !R.count) return { ...a, values: valuesFor(a.type, null) };
-      return { ...a, values: valuesFor(a.type, R.rowAt(R.count - 1)) };
+      return { ...a, values: valuesFor(a.type, lastRealRow(R)) };
     });
   }
 
@@ -241,7 +275,7 @@
     { date: "Ago 2024", evt: "Carry trade",         price: 54000, comp: 0.23,  sig: "NEUTRAL",       mov: 60,  out: "Recuperación +90%" },
     { date: "Dic 2024", evt: "Pico post-elección",  price: 107000,comp: -0.78, sig: "REDUCIR",       mov: -30, out: "Corrección −30% en 4 meses" },
     { date: "Abr 2025", evt: "Tariff scare",        price: 76000, comp: -0.08, sig: "NEUTRAL",       mov: 25,  out: "Recuperación +25% en 6 sem" },
-    { date: "Hoy",      evt: "Lectura actual",      price: 95000, comp: -0.25, sig: "NEUTRAL",       mov: 0,   out: "TBD", today: true },
+    { date: "Hoy",      evt: "Lectura actual",      price: 77036, comp: -0.25, sig: "NEUTRAL",       mov: 0,   out: "TBD", today: true },
   ];
 
   /* ---------- Estadísticas del modelo ---------- */

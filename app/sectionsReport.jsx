@@ -3,20 +3,7 @@
    Une el antiguo "Blog · Informes" con el "Reporte 360".
    ============================================================ */
 
-/* ---------- pluralización ----------
-   El informe se vende por la calidad de la prosa, así que ningún contador
-   generado debe imprimir "1 puntos". plu() recibe el número y la palabra en
-   singular; el plural es el singular + "s" salvo que se indique. */
-function plu(n, sing, plural) {
-  return Math.abs(n) === 1 ? sing : (plural || sing + "s");
-}
-function nplu(n, sing, plural, dec) {
-  /* el número se redondea UNA vez y la palabra se deriva de ese mismo valor:
-     Math.round(-0.5) es -0 pero Math.round(Math.abs(-0.5)) es 1, y esa
-     discrepancia imprimía "1 puntos" y "2 punto". */
-  const v = dec == null ? Math.round(Math.abs(n)) : Number(Math.abs(n).toFixed(dec));
-  return (dec == null ? v : v.toFixed(dec)) + " " + plu(v, sing, plural);
-}
+/* plu() y nplu() viven en app/engine.js, que cargan todas las suites. */
 
 /* ---------- utilidades de fecha ---------- */
 function addDaysIso(iso, n) { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -949,4 +936,4 @@ function RepBox({ lab, val, sub, color }) {
     </div>
   );
 }
-Object.assign(window, { plu, nplu, SectionReporte, InformeSemanal, analogStats, scenarioDist });
+Object.assign(window, { SectionReporte, InformeSemanal, analogStats, scenarioDist });

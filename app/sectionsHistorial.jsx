@@ -117,9 +117,14 @@ function SectionHistorial({ palette }) {
           <table className="tbl">
             <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--card)" }}>
               <tr>
-                <th>Fecha</th><th className="c">Precio</th><th className="c">Var</th>
-                <th className="c">LTH /100</th><th className="c">STH /100</th>
-                <th className="c">Ciclo · LTH</th><th className="c">Corto · STH</th><th>Qué decía</th>
+                <th>Fecha</th>
+                <th className="c">Precio <HelpDot term="Precio" def="Cierre de ese día en dólares, el mismo que usó el modelo para calcular la lectura. No es el precio de hoy: es el que había cuando Bambu habría dado este veredicto." /></th>
+                <th className="c">Var <HelpDot term="Variación diaria" def="Cuánto se movió el precio frente al cierre del día anterior, en porcentaje. Sirve para situar la lectura: un veredicto frío en un día de caída fuerte no significa lo mismo que en un día plano." /></th>
+                <th className="c">LTH /100 <HelpDot term="Temperatura de largo plazo" def="La lectura del ciclo en una escala de 0 a 100, donde 0 es el extremo frío y 100 el caliente. Resume las métricas de largo plazo de ese día —SOPR de holders veteranos, NUPL, MVRV-Z, Mayer— en un solo número. Por debajo de 35 hay zona de acumulación; por encima de 65, de distribución." /></th>
+                <th className="c">STH /100 <HelpDot term="Temperatura de corto plazo" def="Lo mismo en la escala de 0 a 100, pero con las métricas de los compradores recientes: SOPR de corto plazo, NUPL, distancia al precio realizado. Mide si el mercado está sobrecalentado o exhausto en semanas, no en años." /></th>
+                <th className="c">Ciclo · LTH <HelpDot term="Zona del ciclo" def="La traducción en palabras de la temperatura de largo plazo: frío, neutral o caliente. Es la que manda en la decisión, porque marca en qué parte del ciclo estaba el mercado ese día." /></th>
+                <th className="c">Corto · STH <HelpDot term="Zona de corto plazo" def="La misma traducción para el termómetro táctico. Sirve de contexto, no de decisión: afina el momento dentro de lo que ya dijo el ciclo, y por sí solo no tiene ventaja medida sobre comprar un día al azar." /></th>
+                <th>Qué decía <HelpDot term="El veredicto del día" def="La acción que el modelo habría propuesto con los datos de ese día: acumular, mantener, reducir o distribuir. Se reconstruye con el histórico disponible hasta esa fecha, sin usar nada posterior, para que la lectura sea la que de verdad se pudo ver entonces." /></th>
               </tr>
             </thead>
             <tbody>
