@@ -195,8 +195,8 @@
      ausentes y renormaliza los pesos sobre lo que sí se mide. */
   const PRELOAD = {
     BTC: {
-      price: 78189,
-      rpSTH: 71192, sthSopr: 1.002, nuplSTH: 0.12,
+      price: 75886,
+      rpSTH: 71292, sthSopr: 1.002, nuplSTH: 0.12,
       cdd: 3, netflow: -2800,
       ema1d: 13, bb1d: 0.55, rsi1d: 54,
       rpLTH: 38000, lthSopr: 2.4, nuplLTH: 0.5, mvrvZ: 2.7,
@@ -205,8 +205,8 @@
       puell: 1.5, ema1w: 111, bb1w: 0.65, rsi1w: 58,
     },
     ETH: {
-      price: 2514,
-      rpSTH: 2164, sthSopr: 1.002, nuplSTH: 0.08,
+      price: 2397,
+      rpSTH: 2172, sthSopr: 1.002, nuplSTH: 0.08,
       lthNet30: 0.39,
       ema1d: 3, bb1d: 0.45, rsi1d: 47,
       rpLTH: 1600, lthSopr: 1.3, nuplLTH: 0.28, mvrvZ: 1, rhodl: 564.58,
@@ -275,7 +275,7 @@
     { date: "Ago 2024", evt: "Carry trade",         price: 54000, comp: 0.23,  sig: "NEUTRAL",       mov: 60,  out: "Recuperación +90%" },
     { date: "Dic 2024", evt: "Pico post-elección",  price: 107000,comp: -0.78, sig: "REDUCIR",       mov: -30, out: "Corrección −30% en 4 meses" },
     { date: "Abr 2025", evt: "Tariff scare",        price: 76000, comp: -0.08, sig: "NEUTRAL",       mov: 25,  out: "Recuperación +25% en 6 sem" },
-    { date: "Hoy",      evt: "Lectura actual",      price: 78189, comp: -0.25, sig: "NEUTRAL",       mov: 0,   out: "TBD", today: true },
+    { date: "Hoy",      evt: "Lectura actual",      price: 75886, comp: -0.25, sig: "NEUTRAL",       mov: 0,   out: "TBD", today: true },
   ];
 
   /* ---------- Estadísticas del modelo ---------- */
