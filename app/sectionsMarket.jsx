@@ -312,8 +312,10 @@ function SectionOnchain({ results, palette, k }) {
 function macroVerdict(structTemp, s, cal) {
   const nearHigh = cal.filter(e => e.impact === "alto" && e.days <= 7);
   const next = cal.find(e => e.days >= 0) || cal[0];
-  const crowdedLong = s.fundingAvg > 0.015 || s.putCall < 0.8 || s.social > 68;
-  const fearful = s.putCall > 1.05 || s.social < 40;
+  /* el posicionamiento apalancado ya no se finge: sin funding ni opciones
+     conectados, la lectura de multitud se apoya en lo que sí se mide */
+  const crowdedLong = s.social > 68;
+  const fearful = s.social < 40;
   const cheap = structTemp < 45, expensive = structTemp > 58;
   let stance, action, temp, sesgo;
   if (nearHigh.length) {
@@ -362,8 +364,9 @@ function SectionMacro({ results, palette }) {
   const mvInkSm = E.inkColor(mvCol, 4.5);            // tinta de apoyo
   const reasons = [
     mv.next ? `Próximo catalizador: ${mv.next.event} en ${mv.next.days}d (impacto ${mv.next.impact}).` : null,
-    `Sentimiento social ${s.social} · ${s.socialLabel}.`,
-    `Funding ${s.fundingAvg}% (${s.fundingLabel}) · Put/Call ${s.putCall} (${s.putCallLabel}).`,
+    `Sentimiento agregado ${s.social} · ${s.socialLabel}.`,
+    s.dispersion == null ? null
+      : `Dispersión entre los cuatro percentiles: ${s.dispersion} puntos (${s.dispersion <= 20 ? "coinciden" : s.dispersion <= 40 ? "acuerdo parcial" : "se contradicen"}).`,
     `Estructura on-chain ${structTemp.toFixed(0)} de 100 → ${structTemp < 40 ? "barato frente a su historial" : structTemp > 60 ? "caro frente a su historial" : "en su rango habitual"}.`,
   ].filter(Boolean);
 
@@ -409,7 +412,7 @@ function SectionMacro({ results, palette }) {
           </table>
         </Card>
 
-        <Card title={<>Sentimiento agregado <HelpDot term="Qué mide el sentimiento" def="Combina lo que dice la gente (social), lo que paga el apalancamiento (funding), cómo se cubre el mercado de opciones (put/call) y el sesgo de las posiciones abiertas. Es un contrapeso a la lectura on-chain: cuando el sentimiento está eufórico y la cadena fría, suele ganar la cadena; cuando ambos coinciden, la lectura es más fiable." /></>} sub="Social · funding · opciones · posicionamiento" pad={false}>
+        <Card title={<>Sentimiento agregado <HelpDot term="Qué mide el sentimiento" def="La cifra grande resume la temperatura del modelo de BTC: 55% del corto plazo y 45% del ciclo. Los cuatro componentes de abajo son métricas reales y distintas, y cada uno es el percentil de esa métrica sobre toda su serie: 70 significa que solo el 30% de los días del histórico tuvo un valor más alto. La escala no la elige nadie, la fija el propio dato. Por eso pueden discrepar entre sí, y esa discrepancia es la información útil: cuando las cuatro apuntan a lo mismo, la lectura es más fiable; cuando se abren, el mercado está en transición." /></>} sub="Cuatro percentiles independientes sobre datos on-chain de BTC" pad={false}>
           {/* cifra y barra, sin el hueco muerto del semicírculo */}
           <div style={{ padding: "16px 18px 14px" }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 14, flexWrap: "wrap" }}>
@@ -430,15 +433,22 @@ function SectionMacro({ results, palette }) {
             </div>
           </div>
 
-          {/* componentes, cada uno con su sesgo declarado */}
+          {/* componentes: cuatro métricas reales, cada una con su valor de origen */}
           <div style={{ borderTop: "1px solid var(--border)", padding: "12px 18px" }}>
             {s.sources.map(src => {
-              const col = E.tempColor(src.value, palette);       // relleno de la barra
-              const ink = E.inkColor(col, 4.5);                   // tinta de la cifra
+              if (src.value == null) return (
+                <div key={src.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", opacity: .6 }}>
+                  <span style={{ flex: 1, minWidth: 118, fontSize: 12.5, fontWeight: 500 }}>{src.name}</span>
+                  <span className="tiny muted" style={{ fontStyle: "italic" }}>sin dato</span>
+                </div>
+              );
+              const col = E.tempColor(src.value, palette);
+              const ink = E.inkColor(col, 4.5);
               const sesgo = src.value >= 58 ? "empuja al alza" : src.value <= 42 ? "empuja a la baja" : "neutral";
               return (
                 <div key={src.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                  <span style={{ flex: 1, minWidth: 118, fontSize: 12.5, fontWeight: 500 }}>{src.name}</span>
+                  <span style={{ flex: 1, minWidth: 118, fontSize: 12.5, fontWeight: 500 }}>{src.name}
+                    {src.raw != null && <span className="tiny muted num"> · {src.raw.toFixed(src.dec)}</span>}</span>
                   <div style={{ flex: 1.1, minWidth: 70, height: 8, background: "var(--surface-3)", borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ width: src.value + "%", height: "100%", background: col }} />
                   </div>
@@ -451,15 +461,19 @@ function SectionMacro({ results, palette }) {
 
           <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 0, borderTop: "1px solid var(--border)" }}>
             <div style={{ padding: "11px 18px" }}>
-              <div className="tiny muted">Funding medio</div>
-              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.fundingAvg}%</div>
-              <div className="tiny muted" style={{ marginTop: 2 }}>{s.fundingLabel}</div>
+              <div className="tiny muted">Dispersión entre percentiles</div>
+              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.dispersion == null ? "—" : s.dispersion + " pts"}</div>
+              <div className="tiny muted" style={{ marginTop: 2 }}>{s.dispersion == null ? "sin base" : s.dispersion <= 20 ? "las cuatro coinciden" : s.dispersion <= 40 ? "acuerdo parcial" : "se contradicen · mercado en transición"}</div>
             </div>
             <div style={{ padding: "11px 18px", borderLeft: "1px solid var(--border)" }}>
-              <div className="tiny muted">Put/Call</div>
-              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.putCall}</div>
-              <div className="tiny muted" style={{ marginTop: 2 }}>{s.putCallLabel}</div>
+              <div className="tiny muted">Corto · ciclo</div>
+              <div className="num" style={{ fontWeight: 700, fontSize: 17 }}>{s.sthTemp == null ? "—" : s.sthTemp.toFixed(0)} · {s.lthTemp == null ? "—" : s.lthTemp.toFixed(0)}</div>
+              <div className="tiny muted" style={{ marginTop: 2 }}>de dónde sale la cifra grande</div>
             </div>
+          </div>
+
+          <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)" }}>
+            <div className="tiny" style={{ lineHeight: 1.5, color: "var(--ink-2)" }}>Cada componente es el <b>percentil</b> de su propia serie completa de BTC{s.sources[0] && s.sources[0].nHist ? ` (${s.sources[0].nHist} días)` : ""}: la escala la fija el histórico del dato, no un corte elegido a mano. Sin conectar: {s.sinConectar.join(" · ")} —no se estiman desde la cadena, así que no entran en la cifra.</div>
           </div>
 
           {/* la conclusión: sentimiento contra cadena */}
@@ -469,9 +483,13 @@ function SectionMacro({ results, palette }) {
               {(() => {
                 const brecha = s.social - structTemp;
                 const coincide = Math.abs(brecha) < 12;
-                if (coincide) return `El sentimiento (${s.social}) y la estructura on-chain (${structTemp.toFixed(0)}) apuntan al mismo sitio, así que la lectura del día gana fiabilidad: no hay divergencia entre lo que la gente siente y lo que hace con sus monedas.`;
-                if (brecha > 0) return `El sentimiento (${s.social}) va ${nplu(brecha, "punto")} por encima de la estructura on-chain (${structTemp.toFixed(0)}): el ánimo corre más que los datos de cadena. Históricamente en estos desajustes acaba mandando la cadena, así que conviene no dejarse llevar por el optimismo del mercado.`;
-                return `El sentimiento (${s.social}) va ${nplu(brecha, "punto")} por debajo de la estructura on-chain (${structTemp.toFixed(0)}): hay más miedo del que justifican los datos de cadena. Ese desajuste suele preceder a las mejores ventanas de acumulación, aunque exige paciencia.`;
+                /* las dos cifras miden lo mismo con reglas distintas: la de arriba es
+                   la temperatura cruda de hoy, structTemp es su percentil frente al
+                   histórico de los dos activos. Cuando se separan, el valor absoluto
+                   y el valor relativo discrepan, y manda el relativo. */
+                if (coincide) return `La temperatura de hoy (${s.social}) y su percentil frente al histórico (${structTemp.toFixed(0)}) coinciden, así que la lectura del día gana fiabilidad: el valor absoluto y el relativo cuentan la misma historia.`;
+                if (brecha > 0) return `La temperatura de hoy (${s.social}) va ${nplu(brecha, "punto")} por encima de su percentil histórico (${structTemp.toFixed(0)}): la lectura parece caliente en términos absolutos, pero frente a su propia historia el mercado ha estado más caro muchas veces. Manda el percentil.`;
+                return `La temperatura de hoy (${s.social}) va ${nplu(brecha, "punto")} por debajo de su percentil histórico (${structTemp.toFixed(0)}): en términos absolutos la lectura es templada, pero frente a su propia historia el mercado está más arriba de lo que parece. Manda el percentil.`;
               })()}
             </div>
           </div>

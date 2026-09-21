@@ -197,32 +197,57 @@
     return out.sort((a, b) => a.days - b.days);
   }
 
-  /* sentimiento agregado dinámico: derivado de la temperatura actual del composite BTC
-     (coherente con Fear & Greed y con la lectura on-chain del día) */
+  /* ---------- sentimiento agregado ----------
+     La cifra sale de la temperatura del composite de BTC, corto y ciclo. Los
+     componentes de abajo son cuatro métricas REALES y distintas, cada una
+     puntuada por su PERCENTIL sobre su propia serie completa: así la escala no
+     la elige nadie, la fija el histórico del propio dato. Antes eran la misma
+     cifra desplazada unos puntos, lo que daba apariencia de cuatro
+     confirmaciones donde había una sola medida.
+     El percentil se calcula aquí sobre las columnas crudas y no con detPctl,
+     porque el detector no está cargado en las compilaciones Cima ni Go.
+     No hay social, funding, opciones ni long/short: esas fuentes no están
+     conectadas, y estimarlas desde la cadena sería inventarlas. */
+  function pctlOf(type, field) {
+    const R = window.BambuRealData && window.BambuRealData[type];
+    const col = R && R.cols[field];
+    if (!col) return null;
+    const v = col[col.length - 1];
+    if (v == null) return null;
+    let n = 0, menores = 0;
+    for (let i = 0; i < col.length; i++) {
+      if (col[i] == null) continue;
+      n++;
+      if (col[i] < v) menores++;
+    }
+    return n < 30 ? null : { pct: menores / n * 100, raw: v, n };
+  }
   const sentiment = (function () {
-    let t = 50;
+    let t = 50, sth = null, lth = null;
     try {
       const comps = H.dailyComposites("BTC", 27);
       const last = comps[comps.length - 1];
-      t = last.sthTemp * 0.55 + last.lthTemp * 0.45;
+      sth = last.sthTemp; lth = last.lthTemp;
+      t = sth * 0.55 + lth * 0.45;
     } catch (e) { }
     const v = Math.round(Math.max(5, Math.min(95, t)));
     const socialLabel = v < 25 ? "Miedo extremo" : v < 42 ? "Miedo" : v < 58 ? "Neutral" : v < 75 ? "Optimista" : "Euforia";
-    const fundingAvg = Math.round(((v - 50) / 50) * 0.028 * 1000) / 1000;
-    const fundingLabel = fundingAvg <= -0.008 ? "Negativo · shorts pagan" : fundingAvg < 0.008 ? "Plano · sin apalancamiento" : "Positivo · longs pagan";
-    const putCall = Math.round((1 + (50 - v) / 100 * 0.7) * 100) / 100;
-    const putCallLabel = putCall > 1.05 ? "Sesgo put · cobertura" : putCall < 0.95 ? "Sesgo call" : "Equilibrado";
-    const longShortRatio = Math.round((1 + (v - 50) / 100) * 100) / 100;
-    const cl = x => Math.round(Math.max(5, Math.min(95, x)));
-    return {
-      social: v, socialLabel, fundingAvg, fundingLabel, putCall, putCallLabel, longShortRatio,
-      sources: [
-        { name: "Social (X / Reddit)", value: cl(v - 3), scale: 100 },
-        { name: "Funding perpetuos", value: cl(v + 4), scale: 100 },
-        { name: "Opciones (put/call)", value: cl(v - 6), scale: 100 },
-        { name: "Long/Short ratio", value: cl(v + 2), scale: 100 },
-      ],
-    };
+    const def = [
+      ["Manos débiles · NUPL STH", "nuplSTH", 3, "NUPL de compradores recientes"],
+      ["Ganancia del ciclo · NUPL LTH", "nuplLTH", 3, "NUPL de holders veteranos"],
+      ["Prima de mercado · MVRV-Z", "mvrvZ", 2, "MVRV Z-Score"],
+      ["Sobrecompra · RSI semanal", "rsi1w", 1, "RSI 14 semanal"],
+    ];
+    const sources = def.map(([name, field, dec, src]) => {
+      const p = pctlOf("BTC", field);
+      return { name, field, src, dec,
+               value: p ? Math.round(p.pct) : null, raw: p ? p.raw : null, nHist: p ? p.n : null };
+    });
+    const medidas = sources.filter(s => s.value != null);
+    const dispersion = medidas.length > 1
+      ? Math.max.apply(null, medidas.map(s => s.value)) - Math.min.apply(null, medidas.map(s => s.value)) : null;
+    return { social: v, socialLabel, sthTemp: sth, lthTemp: lth, sources, dispersion, medidas: medidas.length,
+             sinConectar: ["Social (X / Reddit)", "Funding de perpetuos", "Opciones (put/call)", "Long/Short ratio"] };
   })();
 
   /* Eventos macro y cripto ya ocurridos, con el efecto real medido en el precio
