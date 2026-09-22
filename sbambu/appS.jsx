@@ -37,7 +37,8 @@ function verdictOf(r, regime) {
   const comp = (50 - mt) / 27;
   const sig = E.signalFor(comp);
   const reg = DD.REGIMES[regime];
-  const capPct = DD.BASE_WEIGHT * DD.SIGNALS[sig].long * reg.mult * 100;
+  /* exposición sobre todo el capital, rango completo 0–100 (ver engine.js) */
+  const capPct = E.exposureFor(mt, regime);
   let stance, action, plain, kind;
   if (mt < 20)      { stance = "ACUMULAR";  kind = "acc"; action = "Comprar con convicción"; plain = "El mercado está muy barato frente a su historia on-chain."; }
   else if (mt < 40) { stance = "ACUMULAR";  kind = "acc"; action = "Comprar poco a poco, en tramos"; plain = "El mercado está barato: zona de acumulación."; }
@@ -316,7 +317,7 @@ function App() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", borderTop: "1px solid var(--border)" }}>
         <Answer lab="Temperatura" val={`${Math.round(v.mt)}°`} sub={v.zone.label} col={col} />
         <Answer lab="Fase del ciclo" val={v.zone.phase.split(" ")[0]} sub={v.zone.phase.split(" ").slice(1).join(" ") || "\u00A0"} border />
-        <Answer lab="Cuánto invertir" val={`${v.capPct.toFixed(1)}%`} sub="de tu capital" col={col} border />
+        <Answer lab="Cuánto invertir" val={`${v.capPct.toFixed(0)}%`} sub="de todo tu capital" col={col} border />
       </div>
     </div>
   );
@@ -387,7 +388,7 @@ function App() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--ink-3)" }}>Contexto del ciclo</div>
         <span style={{ fontWeight: 700, color: "var(--brand-2)", fontSize: 15 }}>{regime}</span>
-        <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>· ajuste de tamaño ×{v.reg.mult.toFixed(2)}</span>
+        <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>· inclina la exposición {E.exposureFor(50, regime) >= 52 ? "+" : ""}{(E.exposureFor(50, regime) - 52).toFixed(0)} pts</span>
       </div>
       <p style={{ fontSize: 13.5, color: "var(--ink-2)", margin: "8px 0 0", lineHeight: 1.55 }}>{v.reg.action}</p>
     </div>

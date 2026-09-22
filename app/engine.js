@@ -105,9 +105,12 @@
     if (v === undefined || v === null || isNaN(v)) return null;
     return m.score(v);
   }
+  /* null, no 0: un grupo sin ninguna métrica medible no es "neutral", es
+     desconocido. Devolver 0 lo metía en el composite con todo su peso y
+     arrastraba la lectura al centro. */
   function avgScores(arr) {
     const s = arr.filter(x => x !== null && x !== undefined);
-    if (!s.length) return 0;
+    if (!s.length) return null;
     return s.reduce((a, b) => a + b, 0) / s.length;
   }
 
@@ -116,10 +119,20 @@
     const groups = schemaHorizon.groups.map(g => {
       const scores = g.metrics.map(m => ({ m, score: metricScore(m, vals), value: metricValue(m, vals) }));
       const sectionScore = avgScores(scores.map(s => s.score));
-      return { id: g.id, name: g.name, weight: g.weight, metrics: scores, sectionScore };
+      const puntuables = g.metrics.filter(m => !m.noscore && m.score).length;
+      const medidas = scores.filter(s => s.score !== null && s.score !== undefined).length;
+      return { id: g.id, name: g.name, weight: g.weight, metrics: scores, sectionScore,
+               cobertura: { medidas, puntuables } };
     });
-    const composite = groups.reduce((a, g) => a + g.weight * g.sectionScore, 0);
-    return { groups, composite };
+    /* Los pesos se renormalizan sobre los grupos que sí tienen dato: con
+       cobertura completa el resultado es idéntico al de antes (los pesos suman
+       1), y sin ella el composite deja de diluirse con ceros inventados. */
+    const activos = groups.filter(g => g.sectionScore !== null);
+    const wTotal = activos.reduce((a, g) => a + g.weight, 0);
+    groups.forEach(g => { g.pesoEfectivo = (g.sectionScore === null || !wTotal) ? 0 : g.weight / wTotal; });
+    const composite = wTotal ? activos.reduce((a, g) => a + g.weight * g.sectionScore, 0) / wTotal : 0;
+    const cob = groups.reduce((a, g) => ({ medidas: a.medidas + g.cobertura.medidas, puntuables: a.puntuables + g.cobertura.puntuables }), { medidas: 0, puntuables: 0 });
+    return { groups, composite, cobertura: cob };
   }
 
   /* ---------- composite → señal · 7 niveles ---------- */
@@ -181,8 +194,12 @@
   /* ---------- régimen de mercado (sobre BTC) ---------- */
   function detectRegime(btcVals) {
     const mayer = btcVals.mayer, lthSup = btcVals.lthSup, emaW = btcVals.ema1w;
-    if ((mayer >= 2.2 || emaW >= 230) && lthSup < 62) return "DISTRIBUCIÓN";
-    if (mayer <= 0.8 && lthSup >= 70) return "ACUMULACIÓN";
+    /* LTH Supply % de BTC no tiene serie real: si falta, el régimen se decide
+       con Mayer y la EMA semanal en vez de bloquearse por un dato ausente. */
+    const supBaja = lthSup == null ? true : lthSup < 62;
+    const supAlta = lthSup == null ? true : lthSup >= 70;
+    if ((mayer >= 2.2 || emaW >= 230) && supBaja) return "DISTRIBUCIÓN";
+    if (mayer <= 0.8 && supAlta) return "ACUMULACIÓN";
     if (mayer < 1.0) return "BEAR MARKET";
     return "BULL MARKET";
   }
@@ -202,6 +219,31 @@
       return { ...r, signal: sig, temp, zone };
     };
     return { asset, schema, vals, sth: enrich(sth), lth: enrich(lth) };
+  }
+
+  /* ---------- exposición del capital total ----------
+     Antes esta cifra salía de BASE_WEIGHT × long × régimen, y su techo era el
+     6,9%: una escala de peso POR POSICIÓN aplicada a una pregunta que es sobre
+     TODO el capital. La consecuencia es que el tablero nunca pedía estar dentro
+     ni fuera, solo distintos grados de casi nada.
+     Ahora la exposición recorre el rango completo: en el extremo frío el capital
+     está 100% invertido y en el extremo caliente 100% fuera. La curva es sobre
+     el percentil de la lectura, no sobre la señal, así que se mueve de forma
+     continua en vez de a saltos de categoría. El régimen inclina el resultado
+     unos puntos, pero no impide llegar a los extremos: en un suelo de ciclo
+     dentro de un bear market el modelo sigue pudiendo pedir todo dentro. */
+  const EXPO_CURVE = [[0, 100], [12, 100], [25, 88], [38, 70], [50, 52], [62, 33], [75, 15], [88, 0], [100, 0]];
+  const REGIME_TILT = { "ACUMULACIÓN": 8, "BULL MARKET": 4, "BEAR MARKET": -6, "DISTRIBUCIÓN": -10 };
+  function exposureFor(rank, regimeName) {
+    if (rank == null || !isFinite(rank)) return 0;
+    const r = Math.max(0, Math.min(100, rank));
+    let base = 0;
+    for (let i = 1; i < EXPO_CURVE.length; i++) {
+      const [x0, y0] = EXPO_CURVE[i - 1], [x1, y1] = EXPO_CURVE[i];
+      if (r <= x1) { base = y0 + (y1 - y0) * (x1 === x0 ? 0 : (r - x0) / (x1 - x0)); break; }
+    }
+    const tilt = REGIME_TILT[regimeName] || 0;
+    return Math.max(0, Math.min(100, base + tilt));
   }
 
   /* ---------- sizing por señal (ajustado por régimen) ---------- */
@@ -231,7 +273,7 @@
     tempColor, readableText, mix, hexToRgb, inkColor, tempInk, contrast,
     metricValue, metricScore, horizonResult,
     signalFor, signalForRank, verdictFromRank, temperature, zoneFor, detectRegime,
-    computeAsset, computeAll, sizing,
+    computeAsset, computeAll, sizing, exposureFor,
     fmt: {
       num(v, d) { if (v === null || v === undefined || isNaN(v)) return "—"; return Number(v).toLocaleString("es-ES", { minimumFractionDigits: d || 0, maximumFractionDigits: d ?? 2 }); },
       usd(v) { if (v === null || isNaN(v)) return "—"; return "$" + Number(v).toLocaleString("en-US", { maximumFractionDigits: v < 100 ? 2 : 0 }); },

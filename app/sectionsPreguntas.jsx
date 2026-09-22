@@ -109,11 +109,11 @@ function qsLTH(r, z, other, v, E, regime, capPct, mv, tkLabel) {
   out.push({
     q: `¿Cuánto de mi capital debería estar en ${tk}?`,
     head: mv ? mv.action : z.action,
-    num: capPct.toFixed(1) + "%", unit: "expuesto · igual que el veredicto",
+    num: capPct.toFixed(0) + "%", unit: "de todo tu capital · igual que el veredicto",
     tone: posMix < 40 ? "cold" : posMix > 60 ? "hot" : "mid",
-    body: `Es la misma cifra que la Exposición sugerida del veredicto: de cada 100 que destines a cripto, hoy conviene tener ${capPct.toFixed(1)} en ${tk} y el resto esperando en efectivo. Sale de la lectura global ${posMix.toFixed(0)} de 100, que promedia los dos horizontes. ` +
-      (posMix < 40 ? "Es una franja para construir posición, repartida en varias compras."
-        : posMix > 60 ? "Es una franja para asegurar parte de lo ganado, no para aumentar."
+    body: `Es la misma cifra que la Exposición sugerida del veredicto: de cada 100 de tu capital, hoy ${capPct.toFixed(0)} deberían estar en ${tk} y el resto en efectivo. Sale de la lectura global ${posMix.toFixed(0)} de 100, que promedia los dos horizontes, y recorre el rango completo: en un extremo frío el modelo pide estar dentro del todo y en uno caliente, fuera del todo. Lo que hay que mover es la diferencia con lo que tengas invertido ahora, no la cifra entera de golpe. ` +
+      (posMix < 40 ? "Zona para construir posición, repartida en varias compras."
+        : posMix > 60 ? "Zona para asegurar parte de lo ganado, no para aumentar."
           : "Sin ventaja clara: sostener lo que ya tienes y no forzar movimientos.") +
       (gap >= 20 ? ` El ciclo va en ${z.rank.toFixed(0)} y el corto plazo en ${other.rank.toFixed(0)}: hay recorrido de fondo, pero el momento de ejecutar puede no ser hoy.` : ""),
     go: "plan", goLab: "Ir a mi plan de aportes",

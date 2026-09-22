@@ -54,14 +54,24 @@ const STANCE = {
   "VENTA FUERTE":   ["DISTRIBUIR · FUERA", "Vender / postura defensiva"],
 };
 const CAP_HINT = {
-  "COMPRA FUERTE":  "Zona de convicción: puedes acercarte al máximo que permita tu plan.",
-  "COMPRA NATURAL": "Buen momento para aportar; reparte en dos o tres tramos.",
-  "COMPRA TEMPRANA":"Empieza bajo y sube si el mercado enfría más.",
-  "NEUTRAL":        "Sin ventaja clara: sostén lo que tienes y no fuerces movimientos.",
-  "REDUCIR":        "Empieza a recortar por tramos; no es zona para aumentar.",
-  "VENTA":          "Zona de salida: asegura resultado por tramos.",
-  "VENTA FUERTE":   "Zona de salida avanzada: prioriza asegurar sobre acertar el máximo.",
+  "COMPRA FUERTE":  "Todo dentro o casi: en estas lecturas el coste de estar fuera supera al de aguantar la vola.",
+  "COMPRA NATURAL": "Mayoría invertida. Cubre la diferencia en dos o tres tramos.",
+  "COMPRA TEMPRANA":"Más dentro que fuera, con pólvora seca para si enfría más.",
+  "NEUTRAL":        "Mitad y mitad: sin ventaja clara, ni forzar entrada ni salir corriendo.",
+  "REDUCIR":        "Más fuera que dentro. Recorta por tramos hasta el nivel sugerido.",
+  "VENTA":          "Minoría invertida: asegura el resto por tramos.",
+  "VENTA FUERTE":   "Todo fuera o casi: prioriza asegurar sobre acertar el máximo.",
 };
+/* de la exposición al movimiento concreto: la cifra sola no dice si hay que
+   comprar o vender, eso depende de dónde esté el capital hoy */
+function capMove(pct) {
+  if (pct >= 95) return "prácticamente todo el capital invertido";
+  if (pct >= 70) return "mayoría invertida, resto en efectivo";
+  if (pct >= 45) return "reparto equilibrado entre invertido y efectivo";
+  if (pct >= 20) return "mayoría en efectivo, posición reducida";
+  if (pct > 5) return "posición testimonial, casi todo en efectivo";
+  return "prácticamente todo el capital fuera";
+}
 function horizonVerdict(results, regime, hz) {
   const H = window.BambuHistory, reg = DD.REGIMES[regime];
   const ranks = results.map(r => H && H.zoneOf
@@ -70,10 +80,12 @@ function horizonVerdict(results, regime, hz) {
   const pos = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 50;
   const sig = E.signalForRank(pos);
   const sg = DD.SIGNALS[sig];
-  /* La bolsa de corto plazo es una fracción del capital, así que su exposición
-     se expresa sobre ese tramo y no sobre la cartera entera. */
-  const capPct = DD.BASE_WEIGHT * sg.long * reg.mult * 100 * (hz === "sth" ? 0.5 : 1);
+  /* Recorre el rango completo, 0 a 100 sobre el capital: la curva vive en el
+     motor para que el veredicto, las preguntas y el plan no puedan discrepar.
+     En el corto plazo la cifra es sobre la bolsa táctica, no sobre la cartera. */
+  const capPct = E.exposureFor(pos, regime);
   const st = STANCE[sig] || STANCE.NEUTRAL;
+  void sg;
   return { hz, pos, zone: H && H.zoneOf ? H.zoneOf(pos, null) : E.zoneFor(pos),
            sig, capPct, stance: st[0], action: st[1], hint: CAP_HINT[sig], reg };
 }
@@ -217,12 +229,12 @@ function VerdictBanner({ results, regime, palette, title }) {
           </div>
           <div>
             <div className="tiny muted">Exposición sugerida <HelpDot k="posicionamiento" /></div>
-            <div className="num" style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.1 }}>{d.capPct.toFixed(1)}%</div>
-            <div className="tiny muted">{d.hz === "sth" ? "de tu bolsa táctica" : "de tu portafolio en cripto"}</div>
+            <div className="num" style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.1 }}>{d.capPct.toFixed(0)}%</div>
+            <div className="tiny muted">{d.hz === "sth" ? "de tu bolsa táctica" : "de todo tu capital"}</div>
           </div>
           <div style={{ paddingBottom: 2 }}><SignalPill signal={d.sig} /></div>
         </div>
-        <div className="tiny muted" style={{ marginTop: 9, lineHeight: 1.45 }}>{d.hint}</div>
+        <div className="tiny muted" style={{ marginTop: 9, lineHeight: 1.45 }}>{capMove(d.capPct)} · {d.hint}</div>
       </div>
     );
   };
@@ -500,10 +512,16 @@ function ResumenAsset({ result, regime, palette }) {
         <div className="divider" style={{ margin: "14px 0 10px" }} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {hr.groups.map(g => (
-            <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 9px", borderRadius: 7, background: "var(--surface-3)" }}>
+            <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 9px", borderRadius: 7, background: "var(--surface-3)", opacity: g.sectionScore == null ? .6 : 1 }}>
               <span className="tiny" style={{ fontWeight: 600 }}>{g.name}</span>
-              <span className="tiny muted">{(g.weight * 100).toFixed(0)}%</span>
-              <ScoreChip score={g.sectionScore} palette={palette} />
+              {/* peso efectivo, no nominal: los grupos sin dato salen del composite
+                  y su peso se reparte entre los que sí se miden */}
+              <span className="tiny muted">{((g.pesoEfectivo != null ? g.pesoEfectivo : g.weight) * 100).toFixed(0)}%</span>
+              {g.cobertura && g.cobertura.medidas < g.cobertura.puntuables &&
+                <span className="tiny muted" title="Métricas con dato real frente a métricas puntuables del grupo">{g.cobertura.medidas}/{g.cobertura.puntuables}</span>}
+              {g.sectionScore == null
+                ? <span className="tiny muted" style={{ fontStyle: "italic" }}>sin dato</span>
+                : <ScoreChip score={g.sectionScore} palette={palette} />}
             </div>
           ))}
         </div>
@@ -586,7 +604,7 @@ function ResumenAsset({ result, regime, palette }) {
           </div>
           <div className="divider" style={{ margin: "14px 0 10px" }} />
           <div className="tiny muted" style={{ lineHeight: 1.55 }}>
-            <strong>Cómo usarlo:</strong> el porcentaje es sobre tu <strong>portafolio total</strong> (igual que la “Exposición sugerida” del veredicto de arriba). Compara la “posición neta” con lo que realmente tienes invertido: si tienes más, no añadas (o reduce); si tienes menos y la señal es de compra, acércate al nivel sugerido en tramos. Si el precio cae de <strong className="num">{E.fmt.usd(E.sizing(E.signalForRank(rankOf(result.lth.temp, "lth")), regime, a.values.price).stopUsd)}</strong>, el modelo considera que el escenario cambió: revísalo antes de seguir añadiendo.
+            <strong>Cómo usarlo:</strong> el porcentaje es el peso <strong>por posición</strong> dentro de la parte invertida, distinto de la “Exposición sugerida” del veredicto, que es sobre todo el capital. Compara la “posición neta” con lo que realmente tienes invertido: si tienes más, no añadas (o reduce); si tienes menos y la señal es de compra, acércate al nivel sugerido en tramos. Si el precio cae de <strong className="num">{E.fmt.usd(E.sizing(E.signalForRank(rankOf(result.lth.temp, "lth")), regime, a.values.price).stopUsd)}</strong>, el modelo considera que el escenario cambió: revísalo antes de seguir añadiendo.
           </div>
         </Card>
       </div>
@@ -754,9 +772,11 @@ function SectionIngreso({ assets, results, regime, palette, onChange, onAddAsset
               <span className="num" style={{ fontWeight: 600 }}>{E.fmt.signed(hr.composite)}</span>
             </div>
             {hr.groups.map(g => (
-              <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
-                <span className="muted">{g.name} <span className="tiny">· {(g.weight * 100).toFixed(0)}%</span></span>
-                <ScoreChip score={g.sectionScore} palette={palette} />
+              <div key={g.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 0", borderTop: "1px solid var(--border)", opacity: g.sectionScore == null ? .6 : 1 }}>
+                <span className="muted">{g.name} <span className="tiny">· {((g.pesoEfectivo != null ? g.pesoEfectivo : g.weight) * 100).toFixed(0)}%{g.cobertura && g.cobertura.medidas < g.cobertura.puntuables ? ` · ${g.cobertura.medidas}/${g.cobertura.puntuables} con dato` : ""}</span></span>
+                {g.sectionScore == null
+                  ? <span className="tiny muted" style={{ fontStyle: "italic" }}>sin dato</span>
+                  : <ScoreChip score={g.sectionScore} palette={palette} />}
               </div>
             ))}
             <div className="divider" style={{ margin: "12px 0" }} />
