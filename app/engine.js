@@ -230,8 +230,10 @@
      está 100% invertido y en el extremo caliente 100% fuera. La curva es sobre
      el percentil de la lectura, no sobre la señal, así que se mueve de forma
      continua en vez de a saltos de categoría. El régimen inclina el resultado
-     unos puntos, pero no impide llegar a los extremos: en un suelo de ciclo
-     dentro de un bear market el modelo sigue pudiendo pedir todo dentro. */
+     unos puntos en la zona media, pero la inclinación se desvanece hacia los
+     bordes: los extremos 0 y 100 son iguales en los cuatro regímenes, así que
+     en un suelo de ciclo dentro de un bear market el modelo sigue pidiendo todo
+     dentro. */
   const EXPO_CURVE = [[0, 100], [12, 100], [25, 88], [38, 70], [50, 52], [62, 33], [75, 15], [88, 0], [100, 0]];
   const REGIME_TILT = { "ACUMULACIÓN": 8, "BULL MARKET": 4, "BEAR MARKET": -6, "DISTRIBUCIÓN": -10 };
   function exposureFor(rank, regimeName) {
@@ -243,7 +245,13 @@
       if (r <= x1) { base = y0 + (y1 - y0) * (x1 === x0 ? 0 : (r - x0) / (x1 - x0)); break; }
     }
     const tilt = REGIME_TILT[regimeName] || 0;
-    return Math.max(0, Math.min(100, base + tilt));
+    /* El tilt se desvanece al acercarse a los extremos: si se sumara plano,
+       un suelo perfecto en bear market daría 94% y nunca el 100% que promete
+       la propia definición. Los anclajes 0 y 100 quedan fijos en todos los
+       regímenes y la inclinación sigue actuando donde importa, en la zona
+       media, que es donde el régimen realmente cambia la decisión. */
+    const factor = 1 - Math.abs(base - 50) / 50;
+    return Math.max(0, Math.min(100, base + tilt * factor));
   }
 
   /* ---------- sizing por señal (ajustado por régimen) ---------- */
