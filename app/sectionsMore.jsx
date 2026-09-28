@@ -296,7 +296,7 @@ function SectionMatrix({ results, horizon, palette }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {results.map(r => r[horizon].groups.map((g, gi) => {
-        const temp = Math.max(2, Math.min(98, 50 - g.sectionScore * 50));
+        const temp = Math.max(2, Math.min(98, 50 - (g.sectionScore || 0) * 50));
         const bands = H && H.bandsFor ? H.bandsFor(r.asset.type, horizon, 27).bands : null;
         const band = bands ? H.bandOf(temp, bands) : null;
         const pos = H && H.tempRank ? H.tempRank(temp, r.asset.type, horizon, 27) : temp;

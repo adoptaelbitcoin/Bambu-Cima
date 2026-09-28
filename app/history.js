@@ -32,7 +32,7 @@
     },
     ETH: {
       price: 2050, rpSTH: 2240, sthSopr: 0.98, nuplSTH: -0.02,
-      netEmS: 0.10, ssr: 8, funding: -0.003, netflow: -14000, doi: -5,
+      netEmS: 0.10, ssr: 8, funding: -0.003, lthNet30: 1.4, doi: -5,
       ema1d: -10, bb1d: 0.28, rsi1d: 36,
       rpLTH: 1560, lthSopr: 1.1, nuplLTH: 0.14, mvrvZ: 0.5, rhodl: 30000,
       reserve: 0.0034, lthSup: 69, asopr: 0.99,
@@ -45,9 +45,9 @@
   const CLAMP = {
     rsi1d: [0, 100], rsi1w: [0, 100], bb1d: [-0.2, 1.4], bb1w: [-0.2, 1.4],
     picycle: [0, 1.3], lthSup: [40, 88], price: [1, 1e9], rpSTH: [1, 1e9], rpLTH: [1, 1e9],
-    reserve: [0.0005, 0.05], mvrvSTH: [0.4, 4], mvrvLTH: [0.4, 6],
+    reserve: [0.0005, 0.05], mvrvSTH: [0.4, 4], mvrvLTH: [0.4, 6], lthNet30: [-12, 12],
   };
-  const SIGNED = new Set(["funding", "netflow", "doi", "ema1d", "ema1w", "nuplSTH", "nuplLTH", "mvrvZ", "netEmS", "netEmL"]);
+  const SIGNED = new Set(["funding", "netflow", "lthNet30", "doi", "ema1d", "ema1w", "nuplSTH", "nuplLTH", "mvrvZ", "netEmS", "netEmL"]);
 
   function buildSeries(key, start, end) {
     const r = rng(hash(key));
@@ -100,7 +100,7 @@
     if (init) Object.assign(init.values, R.latest);
     raw[type] = R.lastDays(DAYS);
   });
-  try { window.BambuDataDate = "2026-09-24"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
+  try { window.BambuDataDate = "2026-09-28"; window.BambuDataTime = "13:00 UTC"; } catch (e) {}
   function realRows(days, type) { const R = realOf(type || "BTC"); return R ? R.lastDays(days) : (raw[type || "BTC"] || raw.BTC); }
 
   /* ----- composite diario derivado del motor (con caché: recalcularlo en cada

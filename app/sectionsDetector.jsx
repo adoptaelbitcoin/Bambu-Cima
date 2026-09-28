@@ -16,6 +16,52 @@ const DET_SELL_P = 90;  // percentil de distribución
 const DET_VEL_DEAD = 1;      // puntos de percentil de giro desde el extremo
 const DET_VEL_WIN = { sth: 10, lth: 21 };   // ventana en la que se busca el extremo
 
+/* ---------- segundo medidor: percentil sobre ventana móvil de 4 años ----------
+   La amplitud del LTH-SOPR se reduce cada ciclo: el percentil 90 de toda la
+   serie de BTC está en un valor de 8,4 mientras el de los últimos cuatro años
+   está en 2,5, porque la cola alta la fijaron 2011 y 2017. Contra todo el
+   histórico el techo de octubre de 2025 marcó percentil 69; contra cuatro años,
+   87. Este medidor compara cada día con sus propios cuatro años anteriores, así
+   que cada ciclo se juzga con su propia amplitud y los ciclos futuros se
+   ajustan solos. Es una única regla aplicada a toda la serie: no hay corte por
+   fechas, que sería elegir el criterio sabiendo ya el resultado.
+   Solo actúa en el lado de venta: el suelo no se desplaza (percentil 10 en 0,62
+   sobre todo el histórico frente a 0,72 en los últimos cuatro años), así que el
+   lado de compra sigue con el gatillo clásico. */
+const DET_ROLL_WIN = 1460;        // 4 años: un ciclo de halving completo
+const DET_ROLL_MIN = 1000;        // sin esta base la ventana no es distribución
+const DET_CYCLE_SELL_P = 95;      // umbral de distribución de ciclo
+/* Filtro de ciclo para el gatillo táctico. Medido en BTC desde 2019: compras
+   tácticas con el núcleo LTH en percentil ≤60 aciertan el 82% a 30 días
+   (mediana +2,7%); con el núcleo por encima de 60, el 30% (mediana −2,8%).
+   El discriminador del corto plazo no es su propio umbral, es si el ciclo
+   acompaña. Y la venta táctica no tiene ventaja a ningún umbral —un STH-SOPR
+   caliente en mercado alcista es fuerza, no techo—, así que deja de proponer
+   venta y pasa a ser un aviso de no añadir. */
+const DET_CYCLE_OK_P = 60;
+const _detRoll = {};
+function _detRollBuild(type, field) {
+  const R = window.BambuRealData[type];
+  const col = R && R.cols[field];
+  if (!col) return null;
+  const out = new Array(col.length).fill(null);
+  const buf = [];
+  const rank = (a, v) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; } return lo; };
+  for (let i = 0; i < col.length; i++) {
+    const drop = i - DET_ROLL_WIN;
+    if (drop >= 0 && col[drop] != null) { const k = rank(buf, col[drop]); if (buf[k] === col[drop]) buf.splice(k, 1); }
+    if (col[i] != null && buf.length >= DET_ROLL_MIN) out[i] = { pct: rank(buf, col[i]) / buf.length * 100, n: buf.length };
+    if (col[i] != null) buf.splice(rank(buf, col[i]), 0, col[i]);
+  }
+  return out;
+}
+function detPctlRollAt(type, field, i) {
+  const ck = type + "|" + field;
+  let arr = _detRoll[ck];
+  if (arr === undefined) arr = _detRoll[ck] = _detRollBuild(type, field);
+  return arr ? (arr[i] || null) : null;
+}
+
 /* ---------- último dato real de un campo, con su antigüedad ----------
    Las series de CSV no se rellenan: null significa sin dato. Aquí se busca el
    último valor real y se declara de qué día es, para no presentar como lectura
@@ -188,16 +234,34 @@ function detCohort(type, cohort) {
   const perdiendoFuerza = vel != null && vel <= -DET_VEL_DEAD;
   const plano = vel != null && !giroAlza && !perdiendoFuerza;
 
+  /* segundo medidor, solo en el núcleo de ciclo: la misma métrica contra su
+     ventana móvil de 4 años. Entra en el veredicto, no solo en la pantalla. */
+  const idx = M ? R.dates.indexOf(M.iso) : -1;
+  const rollInfo = (cohort === "lth" && idx >= 0) ? detPctlRollAt(type, field, idx) : null;
+  const pctRoll = rollInfo ? rollInfo.pct : null;
+  const cicloVenta = v != null && v > 1 && pctRoll != null && pctRoll >= DET_CYCLE_SELL_P;
+
+  /* el termómetro táctico se lee con el ciclo delante */
+  const ML = cohort === "sth" ? detLast(type, "lthSopr") : null;
+  const parPct = ML ? detPctl(type, "lthSopr", ML.v) : null;
+  const cicloOk = parPct == null ? null : parPct <= DET_CYCLE_OK_P;
+
   const br = detBreadth(type);
   let estado, nivel = 0, accion;
   /* Sin dato, o con un dato de semanas atrás, el detector no evalúa: decir
      "sin extremo" sería presentar como lectura algo que no se ha medido. */
   if (v == null) { estado = "SIN DATO"; nivel = null; accion = "No evaluable"; }
   else if (M && !M.fresco) { estado = "SIN DATO RECIENTE"; nivel = null; accion = "No evaluable · la fuente va con retraso"; }
+  /* corto plazo: el gatillo se lee contra el ciclo, y su lado de venta no
+     propone vender */
+  else if (cohort === "sth" && compraBase && cicloOk === false) { estado = "COMPRA CONTRA EL CICLO"; nivel = 0; accion = "No añadir aquí"; }
+  else if (cohort === "sth" && ventaBase) { estado = "CORTO PLAZO CALIENTE"; nivel = -1; accion = "No añadir · sin acción de venta"; }
   else if (compraBase && giroAlza) { estado = "CAPITULACIÓN CONFIRMADA"; nivel = 3; accion = "Lote pesado"; }
-  else if (compraBase) { estado = "CAPITULACIÓN SIN GIRO"; nivel = 2; accion = "Esperar el rebote"; }
-  else if (ventaBase && perdiendoFuerza) { estado = "DISTRIBUCIÓN CONFIRMADA"; nivel = -3; accion = "Venta agresiva"; }
+  else if (compraBase) { estado = "CAPITULACIÓN SIN GIRO"; nivel = 2; accion = "Esperar el rebote"; }  else if (ventaBase && perdiendoFuerza) { estado = "DISTRIBUCIÓN CONFIRMADA"; nivel = -3; accion = "Venta agresiva"; }
   else if (ventaBase) { estado = "DISTRIBUCIÓN SIN AGOTAMIENTO"; nivel = -2; accion = "Empezar a soltar"; }
+  /* el medidor de ciclo no llega a gatillo clásico, pero tampoco es "zona cara":
+     es una fase de reparto medida contra la amplitud del ciclo en curso */
+  else if (cicloVenta) { estado = "DISTRIBUCIÓN DE CICLO"; nivel = -2; accion = "Reducir por tramos"; }
   else if (pct != null && pct <= 20) { estado = "ZONA BARATA"; nivel = 1; accion = "Acumular en tramos"; }
   else if (pct != null && pct >= 80) { estado = "ZONA CARA"; nivel = -1; accion = "Reducir en tramos"; }
   else { estado = "SIN EXTREMO"; nivel = 0; accion = "Sin ventaja: mantener"; }
@@ -207,6 +271,16 @@ function detCohort(type, cohort) {
      el extremo del extremo pesa completo y el borde del umbral, un quinto. */
   const lote = nivel > 0 ? (pct <= 2 ? 1 : pct <= 5 ? 0.7 : pct <= 10 ? 0.4 : pct <= 20 ? 0.2 : 0.1)
              : nivel < 0 ? (pct >= 98 ? 1 : pct >= 95 ? 0.7 : pct >= 90 ? 0.4 : pct >= 80 ? 0.2 : 0.1) : 0;
+  /* el aviso de ciclo pesa la mitad: su lectura es de fase, no de extremo */
+  const loteCiclo = (estado === "DISTRIBUCIÓN DE CICLO" && pctRoll != null)
+    ? (pctRoll >= 99 ? 0.5 : pctRoll >= 97 ? 0.35 : 0.25) : null;
+  /* El corto plazo no propone tamaño en ningún estado. Medido contra la base
+     incondicional de BTC desde 2015 (58% de días en positivo a 30 y 60% a 90),
+     sus compras aciertan el 45% y el 47%: por debajo del azar. Solo el subconjunto
+     filtrado por ciclo desde 2019 lo bate, y son 11 episodios elegidos después de
+     ver el resultado. Hasta que eso se valide fuera de muestra, el táctico es
+     contexto y el tamaño lo decide el ciclo. */
+  const loteCero = cohort === "sth" || estado === "COMPRA CONTRA EL CICLO" || estado === "CORTO PLAZO CALIENTE";
   const evaluable = nivel != null;
 
   /* cuántos días de histórico sostienen el percentil */
@@ -214,18 +288,27 @@ function detCohort(type, cohort) {
   const n = col.filter(x => x != null).length;
 
   /* la amplitud refuerza o rebaja el lote, sin cambiar la dirección del gatillo */
-  let loteAj = lote, aviso = null;
+  let loteAj = loteCero ? 0 : (loteCiclo != null ? loteCiclo : lote), aviso = null;
   if (evaluable && nivel > 0 && br) {
     if (br.confirmaSuelo) { loteAj = Math.min(1, lote * 1.3); aviso = "amplitud confirma: el mercado está mayoritariamente en pérdida"; }
     else if (br.supplyMeta && br.supplyMeta.fresco && br.supplyP > 80) { loteAj = lote * 0.6; aviso = "amplitud no acompaña: casi todo el mercado sigue en ganancia, la rendición no es general"; }
   } else if (evaluable && nivel < 0 && br) {
-    if (br.confirmaTecho) { loteAj = Math.min(1, lote * 1.3); aviso = "amplitud confirma: casi todo el mercado está en ganancia"; }
-    else if (br.supplyMeta && br.supplyMeta.fresco && br.supplyP < 70) { loteAj = lote * 0.6; aviso = "amplitud no acompaña: buena parte del mercado sigue en pérdida"; }
+    if (br.confirmaTecho) { loteAj = Math.min(1, loteAj * 1.3); aviso = "amplitud confirma: casi todo el mercado está en ganancia"; }
+    else if (br.supplyMeta && br.supplyMeta.fresco && br.supplyP < 70) { loteAj = loteAj * 0.6; aviso = "amplitud no acompaña: buena parte del mercado sigue en pérdida"; }
   }
 
-  return { type, cohort, field, value: v, pct, vel, plano, dir, estado, nivel, accion, evaluable,
-           meta: M, asoprMeta: MA,
-           lote: loteAj, loteBase: lote, aviso, breadth: br,
+  /* segundo medidor, solo en el núcleo de ciclo */
+
+  /* nivelBruto conserva la lectura sin degradar: la confluencia entre activos
+     sigue comparando extremos de SOPR, aunque la acción táctica ya no sea
+     comprar o vender */
+  const nivelBruto = (compraBase && giroAlza) ? 3 : compraBase ? 2
+    : (ventaBase && perdiendoFuerza) ? -3 : ventaBase ? -2 : nivel;
+
+  return { type, cohort, field, value: v, pct, vel, plano, dir, estado, nivel, nivelBruto, accion, evaluable,
+           meta: M, asoprMeta: MA, pctRoll, nRoll: rollInfo && rollInfo.n, cicloVenta,
+           parPct, cicloOk, parMeta: ML,
+           lote: loteAj, loteBase: loteCero ? 0 : (loteCiclo != null ? loteCiclo : lote), aviso, breadth: br,
            asopr: aso, asoprPct: asoP, muestras: n,
            robusto: n >= 700, giroAlza, perdiendoFuerza };
 }
@@ -235,10 +318,10 @@ function detConfluence(btc, eth) {
   if (!btc || !eth) return null;
   if (!btc.evaluable || !eth.evaluable) return { id: "nodata", t: "Confluencia no evaluable",
     d: `No se puede comparar los dos activos porque ${!btc.evaluable ? "BTC" : "ETH"} no tiene lectura reciente de SOPR. El detector no marca zona de suelo ni de techo de mercado hasta que la fuente se ponga al día.`, col: "#7A8A80" };
-  const ambosCompra = btc.nivel >= 2 && eth.nivel >= 2;
-  const ambosVenta = btc.nivel <= -2 && eth.nivel <= -2;
-  const soloEth = eth.nivel >= 2 && btc.nivel < 2;
-  const soloEthVenta = eth.nivel <= -2 && btc.nivel > -2;
+  const ambosCompra = (btc.nivelBruto != null ? btc.nivelBruto : btc.nivel) >= 2 && (eth.nivelBruto != null ? eth.nivelBruto : eth.nivel) >= 2;
+  const ambosVenta = (btc.nivelBruto != null ? btc.nivelBruto : btc.nivel) <= -2 && (eth.nivelBruto != null ? eth.nivelBruto : eth.nivel) <= -2;
+  const soloEth = (eth.nivelBruto != null ? eth.nivelBruto : eth.nivel) >= 2 && (btc.nivelBruto != null ? btc.nivelBruto : btc.nivel) < 2;
+  const soloEthVenta = (eth.nivelBruto != null ? eth.nivelBruto : eth.nivel) <= -2 && (btc.nivelBruto != null ? btc.nivelBruto : btc.nivel) > -2;
 
   if (ambosCompra) return { id: "suelo", t: "Suelo confirmado por los dos activos",
     d: "BTC y ETH marcan capitulación al mismo tiempo. Es la lectura más fiable del detector: el suelo no es debilidad de un activo suelto, es rendición de mercado. Aquí tienen sentido los lotes más pesados.", col: "#2E6FAE" };
@@ -281,8 +364,23 @@ function detTriggerAt(type, cohort, i) {
   const compraBase = v < 1 && pct <= DET_BUY_P && asoOkBuy;
   const ventaBase = v > 1 && pct >= DET_SELL_P && asoOkSell;
 
+  /* segundo medidor: ventana móvil de 4 años, lado de venta */
+  const rollInfo = cohort === "lth" ? detPctlRollAt(type, field, i) : null;
+  const pctRoll = rollInfo ? rollInfo.pct : null;
+  const cicloVenta = v > 1 && pctRoll != null && pctRoll >= DET_CYCLE_SELL_P;
+
+  /* filtro de ciclo del gatillo táctico: el percentil del núcleo ese mismo día */
+  let parPct = null, cicloOk = null;
+  if (cohort === "sth") {
+    const rl = detPctlAt(type, "lthSopr", i);
+    parPct = rl ? rl.pct : null;
+    cicloOk = parPct == null ? null : parPct <= DET_CYCLE_OK_P;
+  }
+
   return {
     v, pct, nHist: pctInfo.n, vel, aso, giroAlza, perdiendoFuerza,
+    pctRoll, nRoll: rollInfo && rollInfo.n, ciclo: cicloVenta ? "sell" : null,
+    parPct, cicloOk,
     base: compraBase ? "buy" : ventaBase ? "sell" : null,
     /* confirmado = el nivel 3, el único que dispara lote pesado */
     confirmado: (compraBase && giroAlza) ? "buy" : (ventaBase && perdiendoFuerza) ? "sell" : null,
@@ -789,6 +887,26 @@ function SectionDetector({ palette }) {
             <div className="tiny muted num" style={{ position: "absolute", left: 0, top: 21 }}>≤{DET_BUY_P} compra</div>
             <div className="tiny muted num" style={{ position: "absolute", right: 0, top: 21 }}>≥{DET_SELL_P} venta</div>
           </div>
+          {/* segundo medidor: la misma métrica contra su ventana móvil de 4 años */}
+          {d.cohort === "lth" && d.pctRoll != null &&
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)", display: "flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span className="tiny muted">Distribución de ciclo <HelpDot term="El segundo medidor" def="La amplitud del LTH-SOPR se reduce en cada ciclo, así que el percentil contra todo el histórico se vuelve cada vez más difícil de alcanzar: el techo de octubre de 2025 marcó 69 contra toda la serie y 87 contra los últimos cuatro años. Este medidor compara cada día con sus propios cuatro años anteriores, de modo que cada ciclo se juzga con su propia amplitud y los futuros se ajustan solos. Actúa solo en el lado de venta, porque el suelo del SOPR no se desplaza entre ciclos. Es un aviso de fase, más frecuente y algo menos preciso que el gatillo clásico: sugiere reducir por tramos, no vender de golpe." /></span>
+              <span className="num" style={{ fontSize: 19, fontWeight: 700, color: d.cicloVenta ? E.inkColor("#C0492E", 4.5) : "var(--ink-2)" }}>{pct1(d.pctRoll)}</span>
+              <span className="tiny muted">percentil en ventana de 4 años · umbral ≥{DET_CYCLE_SELL_P}</span>
+              <span style={{ flex: 1 }} />
+              {d.cicloVenta
+                ? <span className="badge" style={{ background: mixSoft("#C0492E"), color: E.inkColor("#C0492E", 4.5, mixSoft("#C0492E")), fontWeight: 700 }}>distribución de ciclo activa · reducir por tramos</span>
+                : <span className="tiny muted">sin distribución de ciclo</span>}
+            </div>}
+          {/* el corto plazo se lee con el ciclo delante */}
+          {d.cohort === "sth" && d.parPct != null &&
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)", display: "flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span className="tiny muted">Filtro de ciclo <HelpDot term="Por qué el táctico se lee con el ciclo delante" def="Medido en BTC desde 2019: las compras tácticas con el núcleo de ciclo en percentil 60 o menos aciertan el 82% a 30 días, con mediana +2,7%. Con el núcleo por encima de 60, el acierto cae al 30% y la mediana a −2,8%. El discriminador del corto plazo no es su propio umbral, sino si el ciclo acompaña. En el lado de venta no hay ventaja a ningún umbral —un SOPR de corto plazo caliente en mercado alcista es fuerza, no techo—, así que el detector no propone vender: avisa de no añadir. La señal táctica además caduca: a 180 días acierta el 29% incluso filtrada." /></span>
+              <span className="num" style={{ fontSize: 19, fontWeight: 700, color: d.cicloOk ? E.inkColor("#2F7D5B", 4.5) : E.inkColor("#B0642A", 4.5) }}>{pct1(d.parPct)}</span>
+              <span className="tiny muted">percentil del núcleo LTH · a favor si ≤{DET_CYCLE_OK_P}</span>
+              <span style={{ flex: 1 }} />
+              <span className="tiny" style={{ fontWeight: 700, color: d.cicloOk ? E.inkColor("#2F7D5B", 4.5) : E.inkColor("#B0642A", 4.5) }}>{d.cicloOk ? "el ciclo acompaña" : "el ciclo va en contra"}</span>
+            </div>}
         </div>
         {/* amplitud: cuánta gente está atrapada, no solo a qué precio vendió */}
         {d.breadth && (d.breadth.supplyP != null || d.breadth.netflow != null) &&
@@ -808,6 +926,7 @@ function SectionDetector({ palette }) {
           <span className="badge" style={{ background: "var(--surface, var(--card, #fff))", color: INK(d.nivel), fontWeight: 700 }}>{d.estado}</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: INK(d.nivel, 4.5, "#F2F3F2") }}>{d.accion}</span>
           {d.lote > 0 && <span className="tiny muted">lote sugerido: <b className="num" style={{ color: INK(d.nivel, 4.5, "#F2F3F2") }}>{(d.lote * 100).toFixed(0)}%</b> del tramo</span>}
+          {d.cohort === "sth" && d.evaluable && <span className="tiny muted">sin tamaño: el corto plazo es contexto, el ciclo decide el lote</span>}
           <span style={{ flex: 1 }} />
           {d.cohort === "sth" && d.asopr != null &&
             <span className="tiny muted">aSOPR {d.asopr.toFixed(3)} · pct {pct1(d.asoprPct)}</span>}
@@ -824,7 +943,7 @@ function SectionDetector({ palette }) {
     <div className="fade-in">
       <div className="page-head">
         <h1>Detector bidireccional <HelpDot term="Cómo funciona el detector" def="El SOPR gira alrededor de 1: por encima el mercado vende con beneficio, por debajo vende en pérdida. El cruce de 1 da la dirección. El percentil histórico da la intensidad: un SOPR bajo en percentil 3 es mucho más raro que uno en percentil 25. Y el giro evita adelantarse a un extremo que todavía se profundiza: mide cuánto ha rebotado el percentil desde su punto más bajo de los últimos días, así que solo cuenta cuando el suelo ya se está formando y no cuando aún se hunde. Los tres juntos forman el gatillo: dirección, intensidad y giro." /></h1>
-        <p>El termómetro del SOPR para BTC y ETH · la dirección la da el cruce de 1, la intensidad el percentil y el momento el giro</p>
+        <p>El termómetro del SOPR para BTC y ETH · la dirección la da el cruce de 1, la intensidad el percentil y el momento el giro · en el núcleo de ciclo, un segundo medidor compara contra la ventana móvil de 4 años</p>
       </div>
 
       {/* confluencia primero: es la lectura que manda */}
@@ -839,51 +958,20 @@ function SectionDetector({ palette }) {
         </div>}
 
       {/* los cuatro termómetros */}
-      <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-3)" }}>Termómetro táctico · STH</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-3)" }}>Termómetro táctico · STH</h2>
+      <p className="tiny muted" style={{ margin: "0 0 10px", lineHeight: 1.5 }}>El corto plazo se lee con el ciclo delante: una compra táctica solo cuenta si el núcleo LTH está en percentil {DET_CYCLE_OK_P} o menos —desde 2019 eso separa un 82% de acierto a 30 días de un 30%—. Y su lado caliente no propone vender, avisa de no añadir: un SOPR de corto plazo alto en mercado alcista es fuerza, no techo.</p>
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <Termo d={D.BTC.sth} lab="Bitcoin · corto plazo" sub="rápido · táctico" />
         <Termo d={D.ETH.sth} lab="Ethereum · corto plazo" sub="rápido · táctico · mayor beta" />
       </div>
 
-      <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-3)" }}>Termómetro de núcleo · LTH</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-3)" }}>Termómetro de núcleo · LTH</h2>
+      <p className="tiny muted" style={{ margin: "0 0 10px", lineHeight: 1.5 }}>Dos medidores en paralelo: el gatillo clásico compara el SOPR con todo el histórico (venta en percentil 90) y el de distribución de ciclo con sus propios cuatro años (venta en percentil 95), porque la amplitud del LTH-SOPR se reduce en cada ciclo. El segundo sugiere reducir por tramos, no vender de golpe.</p>
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <Termo d={D.BTC.lth} lab="Bitcoin · ciclo" sub="lento · núcleo" />
         <Termo d={D.ETH.lth} lab="Ethereum · ciclo" sub={"lento · núcleo" + (D.ETH.lth && !D.ETH.lth.robusto ? " · percentil menos robusto" : "")} />
       </div>
 
-      {/* diferencias entre activos, declaradas */}
-      <Card title="Dónde BTC y ETH no son iguales" sub="El detector aplica la misma lógica, pero la fiabilidad del dato no es la misma" pad={false} style={{ marginBottom: 20 }}>
-        <table className="tbl">
-          <thead><tr><th>Aspecto</th><th>Bitcoin</th><th>Ethereum</th></tr></thead>
-          <tbody>
-            <tr><td style={{ fontWeight: 600 }}>Profundidad de histórico</td>
-              <td className="num">{D.BTC.sth ? D.BTC.sth.muestras : "—"} días de SOPR<div className="tiny muted">percentiles robustos</div></td>
-              <td className="num">{D.ETH.sth ? D.ETH.sth.muestras : "—"} días de SOPR<div className="tiny muted">menos historia</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>SOPR de ciclo (LTH)</td>
-              <td className="num">{D.BTC.lth ? D.BTC.lth.muestras + " días" : "—"}<div className="tiny muted">nativo y completo</div></td>
-              <td className="num">{D.ETH.lth ? D.ETH.lth.muestras + " días" : "—"}<div className="tiny" style={{ color: D.ETH.lth && D.ETH.lth.robusto ? (D.ETH.lth.evaluable ? "#2F7D5B" : "#B0642A") : "#B0642A", fontWeight: 600 }}>
-                {!D.ETH.lth ? "—"
-                  : !D.ETH.lth.robusto ? "percentil frágil: tratar como orientación"
-                  : !D.ETH.lth.evaluable ? `histórico completo, pero la fuente va ${D.ETH.lth.meta.edad} días por detrás`
-                  : "histórico completo: percentil operativo"}</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>Amplitud del mercado</td>
-              <td className="num">{D.BTC.sth && D.BTC.sth.breadth ? D.BTC.sth.breadth.supplyP.toFixed(1) + "% en ganancia" : "—"}<div className="tiny muted">oferta en ganancia y manos débiles</div></td>
-              <td className="num">{D.ETH.sth && D.ETH.sth.breadth ? D.ETH.sth.breadth.supplyP.toFixed(1) + "% en ganancia" : "—"}<div className="tiny muted">disponible en los dos activos</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>Flujo de exchange</td>
-              <td className="num">{D.BTC.sth && D.BTC.sth.breadth && D.BTC.sth.breadth.netflow != null ? "disponible" : "—"}<div className="tiny muted">disparador táctico de suelo</div></td>
-              <td className="tiny" style={{ color: E.inkColor("#B0642A", 4.5), fontWeight: 600 }}>pendiente<div className="tiny muted" style={{ fontWeight: 400 }}>falta el netflow de ETH</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>Pi Cycle</td>
-              <td>Válido · marcó techos históricos<div className="tiny muted">sirve de confirmación secundaria</div></td>
-              <td>Débil · prestado<div className="tiny muted">solo dato de apoyo, nunca gatillo</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>Ancla de ciclo</td>
-              <td>Halving · Puell y ciclos de 4 años<div className="tiny muted">calibra si un percentil bajo es suelo de ciclo o corrección</div></td>
-              <td>Sin halving<div className="tiny muted">sus ciclos siguen a los de BTC</div></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>Rol en el mercado</td>
-              <td>Lidera el ciclo</td>
-              <td>Sigue a BTC con mayor amplitud<div className="tiny muted">el filtro de giro importa más aquí</div></td></tr>
-          </tbody>
-        </table>
-      </Card>
 
 
 
@@ -1232,4 +1320,4 @@ function SectionDetector({ palette }) {
   );
 }
 
-Object.assign(window, { SectionDetector, detCohort, detConfluence, detHistory, detPctl });
+Object.assign(window, { SectionDetector, detCohort, detConfluence, detHistory, detPctl, detPctlAt, detVelocityAt, detTriggerAt, detLast, detPctlRollAt, DET_BUY_P, DET_SELL_P, DET_VEL_DEAD, DET_VEL_WIN, DET_ROLL_WIN, DET_CYCLE_SELL_P });

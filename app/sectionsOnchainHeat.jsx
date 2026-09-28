@@ -64,6 +64,33 @@ function buildHeatMetrics(type, horizon, last) {
   }
   return metrics;
 }
+/* ---------- series suavizadas (btc_onchain.csv / eth_onchain.csv) ----------
+   Cada una hereda la función de puntuación de su métrica base, así que su color
+   se lee en la misma escala que la original. Se muestran como filas propias en
+   el mapa y en la tabla, pero NO entran en el Índice Bambú: meterlas duplicaría
+   el peso de SOPR y NUPL, que ya están dentro con su media de 7 días. */
+const SMOOTH_DEFS = {
+  STH: [
+    ["sthSopr", "sthSoprE7", "STH-SOPR · EMA 7"], ["sthSopr", "sthSoprE14", "STH-SOPR · EMA 14"],
+    ["nuplSTH", "nuplSTHs7", "NUPL STH · SMA 7"], ["nuplSTH", "nuplSTHs14", "NUPL STH · SMA 14"],
+    ["asopr", "asoprE7", "aSOPR · EMA 7"], ["asopr", "asoprE14", "aSOPR · EMA 14"], ["asopr", "asoprS14", "aSOPR · SMA 14"],
+  ],
+  LTH: [
+    ["lthSopr", "lthSoprS28", "LTH-SOPR · SMA 28"], ["lthSopr", "lthSoprS60", "LTH-SOPR · SMA 60"],
+    ["nuplLTH", "nuplLTHs28", "NUPL LTH · SMA 28"], ["nuplLTH", "nuplLTHs60", "NUPL LTH · SMA 60"],
+    ["asopr", "asoprS28", "aSOPR · SMA 28"], ["asopr", "asoprS60", "aSOPR · SMA 60"],
+  ],
+};
+function smoothMetrics(type, horizon) {
+  const schema = window.BambuData.metricsFor(type);
+  const all = [...schema.sth.groups, ...schema.lth.groups].flatMap(g => g.metrics);
+  const R = window.BambuRealData && window.BambuRealData[type];
+  return (SMOOTH_DEFS[horizon] || []).map(([base, key, label]) => {
+    const b = all.find(m => m.key === base && m.score);
+    if (!b || !R || !R.cols[key]) return null;
+    return { ...b, key, label, tech: label, groupName: "Suavizadas", smooth: true, baseKey: base, baseLabel: b.label };
+  }).filter(Boolean);
+}
 function indexOfMetrics(values, metrics) {
   let s = 0, c = 0;
   metrics.forEach(m => { const sc = E.metricScore(m, values); if (sc != null && !isNaN(sc)) { s += sc; c++; } });
@@ -323,6 +350,8 @@ function OnchainHeat({ type, palette, k }) {
   const groups = (horizon === "STH" ? schema.sth : schema.lth).groups;
   const last = rows[rows.length - 1].values;
   let metrics = buildHeatMetrics(type, horizon, last);
+  const smooth = smoothMetrics(type, horizon);
+  const shown = metrics.concat(smooth);       // filas visibles: índice + suavizadas
 
   // ---- tomador de decisión: media de scores de las métricas visibles ----
   function rowDecision(values) {
@@ -352,7 +381,9 @@ function OnchainHeat({ type, palette, k }) {
   const psp = (pmax - pmin) || 1; pmin -= psp * 0.06; pmax += psp * 0.06;
   const PY = v => 8 + (1 - (v - pmin) / (pmax - pmin)) * (PRICEH - 16);
   const decY = PRICEH + 16, metricsY = decY + DECH + 16;
-  const panelH = metricsY + metrics.length * (ROWH + GAP) + 28;
+  const SEPH = smooth.length ? 26 : 0;        // rótulo que separa las suavizadas
+  const rowY = mi => metricsY + mi * (ROWH + GAP) + (mi >= metrics.length ? SEPH : 0);
+  const panelH = metricsY + shown.length * (ROWH + GAP) + SEPH + 28;
 
   // segmentos de precio coloreados por la decisión
   const segs = [];
@@ -445,8 +476,12 @@ function OnchainHeat({ type, palette, k }) {
               <text key={"dn" + i} x={X(i)} y={decY + DECH / 2 + 4} textAnchor="middle" fontSize="10.5" fontWeight="700" fontFamily="var(--mono)" fill={E.readableText(heatScore(decChart[i]))}>{(decChart[i] > 0 ? "+" : "") + Math.round(decChart[i] * 100)}</text>)}
 
             {/* ribbons por métrica */}
-            {metrics.map((m, mi) => {
-              const y = metricsY + mi * (ROWH + GAP);
+            {smooth.length > 0 && <g>
+              <line x1={6} y1={rowY(metrics.length) - SEPH / 2 - 4} x2={W - 12} y2={rowY(metrics.length) - SEPH / 2 - 4} stroke="#C9CEC5" strokeWidth="1" strokeDasharray="3 3" />
+              <text x={6} y={rowY(metrics.length) - 7} fontSize="10" fontWeight="700" fill="#586259">SUAVIZADAS · no entran en el índice</text>
+            </g>}
+            {shown.map((m, mi) => {
+              const y = rowY(mi);
               return <g key={m.key + m.horizon}>
                 <text x={6} y={y + ROWH / 2 + 3.5} fontSize="10" fill="#1B2420" fontWeight="500">{m.label.length > 28 ? m.label.slice(0, 27) + "…" : m.label}</text>
                 {chartRows.map((r, i) => {
@@ -466,8 +501,8 @@ function OnchainHeat({ type, palette, k }) {
       {/* TABLA DE CALOR */}
       <Card title={`${type}-${horizon} · Tabla de calor`} sub={`Ordenada de la fecha más reciente a la más antigua · ${tableTruncated ? `${tableRows.length} fechas muestreadas de ${spanDays.toLocaleString("es-ES")} días` : `${tableRows.length} días consecutivos`} · DECISIÓN = Índice Bambú (verde acumular, rojo distribuir)`} style={{ marginTop: 16 }} pad={false}
         right={<div style={{ display: "flex", gap: 6 }}>
-          <button className="btn" style={{ padding: "6px 11px", fontSize: 12 }} onClick={() => exportHeatCSV(type, horizon, tableRows, metrics, rowDecision)}>⤓ CSV</button>
-          <button className="btn" style={{ padding: "6px 11px", fontSize: 12 }} onClick={() => exportHeatPDF(type, horizon, tableRows, metrics, rowDecision, palette, { from: rows[rows.length - 1].iso, to: rows[0].iso })}>⤓ PDF</button>
+          <button className="btn" style={{ padding: "6px 11px", fontSize: 12 }} onClick={() => exportHeatCSV(type, horizon, tableRows, shown, rowDecision)}>⤓ CSV</button>
+          <button className="btn" style={{ padding: "6px 11px", fontSize: 12 }} onClick={() => exportHeatPDF(type, horizon, tableRows, shown, rowDecision, palette, { from: rows[rows.length - 1].iso, to: rows[0].iso })}>⤓ PDF</button>
         </div>}>
         <div style={{ overflow: "auto", maxHeight: 560 }}>
           <table className="tbl heat-tbl">
@@ -476,7 +511,12 @@ function OnchainHeat({ type, palette, k }) {
                 <th style={{ position: "sticky", left: 0, zIndex: 3, background: "var(--surface)" }}>Fecha</th>
                 <th className="r">Precio</th>
                 <th className="c" style={{ position: "sticky", left: 0, zIndex: 1 }}>Decisión</th>
-                {metrics.map(m => <th key={m.key + m.horizon} className="c" title={m.tech}><span style={{ display: "inline-flex", alignItems: "center" }}>{shortLabel(m.label)}<HelpDot k={m.key} /></span></th>)}
+                {shown.map((m, mi) => <th key={m.key + m.horizon} className="c" title={m.tech}
+                    style={mi === metrics.length ? { borderLeft: "2px solid #9AA39A" } : undefined}>
+                  <span style={{ display: "inline-flex", alignItems: "center" }}>{shortLabel(m.label)}
+                    {m.smooth
+                      ? <HelpDot term={m.label} def={`Versión suavizada de ${m.baseLabel}. Se colorea con la misma escala que la métrica original, así que un verde o un rojo significan lo mismo en las dos. Al promediar más días reacciona más tarde pero con menos ruido: sirve para confirmar si un giro de la original se sostiene. No entra en el Índice Bambú.`} />
+                      : <HelpDot k={m.key} />}</span></th>)}
               </tr>
             </thead>
             <tbody>
@@ -489,11 +529,11 @@ function OnchainHeat({ type, palette, k }) {
                     <td style={{ fontWeight: 600, whiteSpace: "nowrap", position: "sticky", left: 0, zIndex: 2, background: isToday ? "var(--brand-soft)" : "var(--surface)" }}>{r.iso}{isToday ? " · hoy" : ""}</td>
                     <td className="r num" style={{ fontWeight: 600 }}>{E.fmt.usd(r.values.price)}</td>
                     <td className="c num" style={{ background: decBg, color: E.readableText(decBg), fontWeight: 700, fontSize: 13 }}>{dec == null ? "—" : (dec > 0 ? "+" : "") + Math.round(dec * 100)}</td>
-                    {metrics.map(m => {
+                    {shown.map((m, mi) => {
                       const v = E.metricValue(m, r.values);
                       const sc = E.metricScore(m, r.values);
                       const bg = heatScore(sc);
-                      return <td key={m.key + m.horizon} className="c num" style={{ background: bg, color: E.readableText(bg), fontWeight: 600 }}>{window.fmtVal(v, m.unit)}</td>;
+                      return <td key={m.key + m.horizon} className="c num" style={{ background: bg, color: E.readableText(bg), fontWeight: 600, borderLeft: mi === metrics.length ? "2px solid #9AA39A" : undefined }}>{window.fmtVal(v, m.unit)}</td>;
                     })}
                   </tr>
                 );
@@ -505,7 +545,7 @@ function OnchainHeat({ type, palette, k }) {
 
       <div className="tiny muted" style={{ marginTop: 10 }}>
         {isRealBtc
-          ? <>Datos reales · el <strong>Índice Bambú</strong> promedia las {metrics.length} métricas {horizon} con señal y va de −100 (distribuir) a +100 (acumular). Las métricas sin fuente (SSR, funding, Reserve Risk…) no entran aquí.</>
+          ? <>Datos reales · el <strong>Índice Bambú</strong> promedia las {metrics.length} métricas {horizon} con señal y va de −100 (distribuir) a +100 (acumular). Las métricas sin fuente (SSR, funding, Reserve Risk…) no entran aquí.{smooth.length ? <> Las {smooth.length} <strong>suavizadas</strong> de la parte baja se colorean con la escala de su métrica base y quedan fuera del índice.</> : null}</>
           : <>{type} usa datos de muestra (90 días). Conecta su CSV para datos reales.</>}
       </div>
     </div>

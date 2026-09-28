@@ -6,8 +6,8 @@
 function SectionEscenarios({ palette, k }) {
   const [whatTk, setWhatTk] = React.useState("BTC");
   const base = DD.PRELOAD[whatTk];
-  const [sc, setSc] = React.useState({ price: base.price, nuplLTH: base.nuplLTH, rsi1w: base.rsi1w, mayer: base.mayer, funding: base.funding });
-  React.useEffect(() => { const b = DD.PRELOAD[whatTk]; setSc({ price: b.price, nuplLTH: b.nuplLTH, rsi1w: b.rsi1w, mayer: b.mayer, funding: b.funding }); }, [whatTk]);
+  const [sc, setSc] = React.useState({ price: base.price, nuplLTH: base.nuplLTH, rsi1w: base.rsi1w, mayer: base.mayer, mvrvZ: base.mvrvZ });
+  React.useEffect(() => { const b = DD.PRELOAD[whatTk]; setSc({ price: b.price, nuplLTH: b.nuplLTH, rsi1w: b.rsi1w, mayer: b.mayer, mvrvZ: b.mvrvZ }); }, [whatTk]);
   const scAsset = { type: whatTk, values: { ...base, ...sc } };
   const r = E.computeAsset(scAsset, { k });
   const baseR = E.computeAsset({ type: whatTk, values: { ...base } }, { k });
@@ -71,8 +71,8 @@ function SectionEscenarios({ palette, k }) {
             <Slider lab="NUPL LTH" min={-0.2} max={0.9} step={0.01} val={sc.nuplLTH} set={v => setSc({ ...sc, nuplLTH: v })} fmt={v => v.toFixed(2)} />
             <Slider lab="RSI 14 (1W)" min={20} max={90} step={1} val={sc.rsi1w} set={v => setSc({ ...sc, rsi1w: v })} />
             <Slider lab="Mayer Multiple" min={0.4} max={3} step={0.05} val={sc.mayer} set={v => setSc({ ...sc, mayer: v })} fmt={v => v.toFixed(2)} />
-            <Slider lab="Funding 30d MA (%)" min={-0.05} max={0.06} step={0.001} val={sc.funding} set={v => setSc({ ...sc, funding: v })} fmt={v => v.toFixed(3)} />
-            <button className="btn" style={{ marginTop: 12 }} onClick={() => { const b = DD.PRELOAD[whatTk]; setSc({ price: b.price, nuplLTH: b.nuplLTH, rsi1w: b.rsi1w, mayer: b.mayer, funding: b.funding }); }}>↺ Restablecer a hoy</button>
+            <Slider lab="MVRV Z-Score" min={-1} max={10} step={0.1} val={sc.mvrvZ} set={v => setSc({ ...sc, mvrvZ: v })} fmt={v => v == null ? "—" : v.toFixed(2)} />
+            <button className="btn" style={{ marginTop: 12 }} onClick={() => { const b = DD.PRELOAD[whatTk]; setSc({ price: b.price, nuplLTH: b.nuplLTH, rsi1w: b.rsi1w, mayer: b.mayer, mvrvZ: b.mvrvZ }); }}>↺ Restablecer a hoy</button>
           </div>
           <div>
             <div className="tiny muted" style={{ marginBottom: 8 }}>Resultado del escenario · MVRV LTH se recalcula del precio = <span className="num">{(sc.price / base.rpLTH).toFixed(2)}x</span></div>

@@ -15,6 +15,7 @@ const ICONS = {
   preguntas:["M12 17h.01", "M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1.1-1.3 2", "M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"],
   resumen:  ["M3 13h4l2 6 4-14 2 8h6"],
   ingreso:  ["M4 6h16", "M4 12h9", "M4 18h6", "M15 17l2 2 4-4"],
+  detector: ["M3 12h3l2-7 3 14 2.5-9 2 5h5.5"],
   heatmap:  ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"],
   backtest: ["M3 3v18h18", "M7 14l3-4 3 3 4-7"],
   historial:["M4 5h16", "M4 10h16", "M4 15h10", "M4 20h6"],

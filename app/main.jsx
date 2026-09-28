@@ -11,6 +11,8 @@ const NAVGROUPS = [
   { label: "Análisis", items: [
     { id: "resumen",  label: "Resumen",         icon: "resumen" },
     { id: "detector", label: "Detector SOPR",    icon: "detector" },
+    { id: "backlth",  label: "Backtest LTH SOPR", icon: "backtest" },
+    { id: "backsth",  label: "Backtest STH SOPR", icon: "backtest" },
     { id: "heatmap",  label: "Heatmap de zonas", icon: "heatmap" },
     { id: "historico",label: "Histórico",        icon: "historico" },
     { id: "ciclo",    label: "Ciclo Halving +", icon: "ciclo" },
@@ -38,6 +40,8 @@ const TITLES = {
   resumen: ["Resumen ejecutivo", "Tu punto de partida · la lectura de hoy"],
   heatmap: ["Heatmap de zonas", "Mapa térmico acumulación → distribución"],
   detector:["Detector bidireccional", "El termómetro del SOPR para BTC y ETH · dirección, intensidad y giro"],
+  backlth: ["Backtest LTH SOPR", "Cada disparo del SOPR de ciclo en todo el histórico · dos medidores · BTC y ETH"],
+  backsth: ["Backtest STH SOPR", "Cada disparo del SOPR de corto plazo en todo el histórico · BTC y ETH"],
   historico:["Histórico de datos", "Series diarias y comparativos BTC / ETH"],
   ciclo:   ["Ciclo Halving +", "Ciclos, fases alcistas/bajistas y proyección"],
   backtest:["Backtest & Estadísticas", "Puntos de inflexión + hit-rate, profit factor y resultados"],
@@ -58,6 +62,8 @@ const SECTION_HELP = {
   heatmap: "Mapa térmico del mercado. Ubica cada señal entre acumulación (frío/azul) y distribución (caliente/rojo). Sirve para ver de un vistazo en qué zona del ciclo está cada activo y horizonte.",
   historico: "Series diarias reales de BTC y ETH. Explora cualquier métrica on-chain en el tiempo, coloreada por su score, y compara cómo se movió frente al precio. Útil para entender el contexto detrás de la señal de hoy.",
   ciclo: "Todo gira en torno al halving de Bitcoin. Muestra dónde estás en el ciclo, compara los ciclos pasados (incluido qué hizo ETH en cada uno) y proyecta las fases alcista/bajista con sus fechas.",
+  backlth: "El detector bidireccional, disparo a disparo, solo en los momentos de ciclo (LTH). Para cada día en que el SOPR de largo plazo dio señal, muestra la fecha, el precio, los valores exactos de las métricas que dispararon el gatillo, la lectura del termómetro táctico de ese mismo día y qué hizo el precio después. Sirve para comparar la señal de hoy con toda la historia.",
+  backsth: "El mismo backtest, pero sobre el termómetro táctico de corto plazo. El gatillo exige además que el aSOPR confirme la dirección y mide el giro en diez días en vez de veintiuno. Cada fila trae la lectura del núcleo de ciclo del mismo día, para ver si los dos horizontes coincidían.",
   backtest: "La prueba de fiabilidad del modelo. Mide cuánto han acertado históricamente sus señales (hit-rate, profit factor) en los puntos de inflexión reales. Te dice si puedes confiar en la señal antes de arriesgar dinero.",
   sizing: "El manual de tamaños y protección. Por cada señal define cuánto comprar (LONG), cuánta cobertura, dónde poner el stop y dónde tomar ganancias, ajustado por el régimen de mercado. Decide el 'cuánto', no el 'en qué dirección'.",
   onchain: "Análisis on-chain ampliado: cohortes de holders, flujos de exchanges y actividad de ballenas. Para profundizar más allá de las métricas del resumen.",
@@ -86,6 +92,24 @@ function freshAsset() {
   return { id, name: "Activo " + assetSeq, ticker: "AST" + assetSeq, type: "BTC", values: { ...DD.PRELOAD.BTC, price: 100, rpSTH: 98, rpLTH: 60 } };
 }
 
+class SectionBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidUpdate(prev) { if (prev.page !== this.props.page && this.state.err) this.setState({ err: null }); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="card" style={{ padding: 20, borderTop: "4px solid #C0492E" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Esta sección no se pudo dibujar</div>
+        <p className="tiny muted" style={{ lineHeight: 1.55, margin: "0 0 10px" }}>
+          El resto del tablero sigue funcionando: elige otra sección en el menú. Detalle técnico para corregirlo:
+        </p>
+        <pre className="tiny num" style={{ whiteSpace: "pre-wrap", background: "var(--surface-3)", padding: 10, borderRadius: 8, margin: 0 }}>{String(this.state.err && this.state.err.message || this.state.err)}</pre>
+      </div>
+    );
+  }
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [navOpen, setNavOpen] = React.useState(false);
@@ -93,7 +117,7 @@ function App() {
     const p = localStorage.getItem("bambu_page");
     return (p && p !== "ingreso" && p !== "blog" && p !== "mercado") ? p : "resumen";
   });
-  const ASSETS_KEY = "bambu_assets_" + (window.BambuDataDate || "v11");
+  const ASSETS_KEY = "bambu_assets_" + (window.BambuDataDate || "v11") + "-cob2";
   const [assets, setAssets] = React.useState(() => {
     try { const s = localStorage.getItem(ASSETS_KEY); if (s) return JSON.parse(s); } catch (e) {}
     /* limpia versiones de fechas anteriores para no acumular basura */
@@ -189,6 +213,8 @@ function App() {
       case "resumen":  return <SectionResumen results={results} regime={regime} palette={palette} onGo={setPage} k={k} />;
       case "heatmap":  return <SectionHeatmap results={results} regime={regime} palette={palette} k={k} />;
       case "detector": return <SectionDetector palette={palette} />;
+      case "backlth": return <SectionBackLTH palette={palette} />;
+      case "backsth": return <SectionBackSTH palette={palette} />;
       case "historico":return <SectionHistorico results={results} regime={regime} palette={palette} k={k}
                                 snapshots={snapshots} onSaveSnapshot={onSaveSnapshot} />;
       case "ciclo":    return <SectionCiclo palette={palette} />;
@@ -266,7 +292,7 @@ function App() {
             <span className="v num">{dataAsOf}</span>
           </div>
         </header>
-        <div className="content">{view()}</div>
+        <div className="content"><SectionBoundary page={page}>{view()}</SectionBoundary></div>
       </div>
 
       {/* Tweaks */}
