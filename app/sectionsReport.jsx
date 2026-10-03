@@ -716,6 +716,7 @@ function InformeSemanal({ results, palette }) {
                   <SignalPill signal={sigA} />
                 </div>
                 <p style={{ margin: "0 0 10px", fontSize: 13.5, lineHeight: 1.55, color: "var(--ink-2)" }}>{weekNarrative(w, A.t, sigA)}</p>
+                {window.RcPriceCost && <div style={{ margin: "0 0 12px" }}><window.RcPriceCost t={A.t} endI={A.b.i} days={90} height={170} title="Precio frente a costes STH y LTH · últimos 90 días" /></div>}
                 <table className="tbl">
                   <thead><tr><th>Fundamental</th><th className="r">Inicio</th><th className="r">Cierre</th><th className="r">Δ semana</th></tr></thead>
                   <tbody>
@@ -912,17 +913,20 @@ function SectionReporte({ results, regime, palette }) {
       <div className="page-head" style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 260 }}>
           <h1>Reporte 360</h1>
-          <p>Informes del modelo sobre datos reales on-chain. El <strong>informe semanal</strong> recopila cada lunes lo que pasó y lo que viene; el <strong>informe on-chain</strong> reconstruye el análisis para cualquier temporalidad.</p>
+          <p>Informes del modelo sobre datos reales on-chain. El <strong>informe semanal</strong> recopila cada lunes lo que pasó y lo que viene; el <strong>informe mensual institucional</strong> cierra cada mes para comité de inversión; el <strong>informe on-chain</strong> reconstruye el análisis para cualquier temporalidad.</p>
         </div>
         <div className="seg no-print">
           <button className={mode === "semanal" ? "on" : ""} onClick={() => setMode("semanal")}>Informe semanal · lunes</button>
+          <button className={mode === "mensual" ? "on" : ""} onClick={() => setMode("mensual")}>Informe mensual · institucional</button>
           <button className={mode === "onchain" ? "on" : ""} onClick={() => setMode("onchain")}>Informe on-chain</button>
         </div>
       </div>
 
       {mode === "semanal"
         ? <InformeSemanal results={results} palette={palette} />
-        : <InformeOnchain palette={palette} />}
+        : mode === "mensual" && window.InformeMensual
+          ? <window.InformeMensual palette={palette} />
+          : <InformeOnchain palette={palette} />}
     </div>
   );
 }
@@ -936,4 +940,4 @@ function RepBox({ lab, val, sub, color }) {
     </div>
   );
 }
-Object.assign(window, { SectionReporte, InformeSemanal, analogStats, scenarioDist });
+Object.assign(window, { SectionReporte, InformeSemanal, analogStats, scenarioDist, repSnap, repFecha, RepHead, RepBox });
