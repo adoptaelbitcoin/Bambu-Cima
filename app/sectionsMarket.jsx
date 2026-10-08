@@ -229,6 +229,7 @@ function SectionOnchain({ results, palette, k }) {
         <div className="page-head"><h1>On-chain · {t}</h1><p>Mapa de calor de {t} por horizonte: identifica visualmente los momentos de <strong style={{ color: "#0E5A2F" }}>acumulación (verde)</strong> y <strong style={{ color: "#8E2A1A" }}>distribución (rojo)</strong>.</p></div>
         <TabBar />
         <OnchainHeat type={t} palette={palette} k={k} />
+        {window.SupplyProfitCard && <window.SupplyProfitCard type={t} />}
       </div>
     );
   }
