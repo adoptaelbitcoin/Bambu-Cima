@@ -1,220 +1,128 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bambú CIMA 2.0</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#f5f4ef;--card:#fff;--ink:#141714;--mut:#5e655f;--line:#e2e1da;--cold:#1f4e9c;--cold2:#8fc0f0;--green:#0d7a2f;--yel:#f7e6a0;--or:#ee9b4a;--red:#c0392b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Instrument Sans",system-ui,sans-serif}
-a{color:var(--cold)}a:hover{color:var(--red)}
-.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 40px;display:flex;flex-direction:column;gap:18px}
-.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
-.brand{display:flex;align-items:baseline;gap:10px}.brand h1{margin:0;font-size:24px;letter-spacing:-.02em}.brand span{color:var(--mut);font-size:13px}.brand .upd{font:500 12px "JetBrains Mono",monospace;color:var(--mut);background:#e9e8e1;padding:3px 8px;border-radius:6px}
-.seg{display:flex;gap:4px;background:#e9e8e1;border-radius:10px;padding:4px}
-.seg button{border:0;background:transparent;font:inherit;font-weight:600;padding:8px 14px;border-radius:7px;color:var(--mut);cursor:pointer}
-.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-#coin button{font-size:17px;padding:10px 26px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-.card h2{margin:0 0 2px;font-size:17px}.sub{margin:0 0 14px;color:var(--mut);font-size:13px}
-.hero{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
-.th-head{display:flex;gap:10px;align-items:center;margin-bottom:6px}.th-head b{font-size:16px}
-.hz{display:inline-block;font:700 12px "JetBrains Mono",monospace;letter-spacing:.06em;padding:3px 8px;border-radius:6px;color:#fff;vertical-align:2px}.hz.sth{background:#3d6fbf}.hz.lth{background:#0d7a2f}
-.combo{grid-column:1/-1;margin:0;text-align:center;font-size:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px}.th-src{margin:0;font:500 13px "JetBrains Mono",monospace;color:var(--mut)}
-#today{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#today .asof{grid-column:1/-1}
-.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:600}
-.muted{color:var(--mut)}.sm{font-size:12.5px;margin:6px 0 0}
-.th-wrap{display:grid;grid-template-columns:22px 38px 112px minmax(0,1fr);gap:8px;align-items:stretch;min-height:300px;margin-top:10px}
-.th-ticks{position:relative;margin:14px 0}
-.th-bar{position:relative;border-radius:19px;margin:14px 0;overflow:visible}
-.tk{position:absolute;right:0;transform:translateY(50%);font:500 10.5px "JetBrains Mono",monospace;color:var(--mut)}
-.th-mark{position:absolute;left:-6px;right:-6px;height:0;transform:translateY(0)}
-.th-mark i{position:absolute;left:0;right:0;top:-4px;height:8px;border-radius:4px;background:var(--ink);box-shadow:0 0 0 3px #fff}
-.th-zones{position:relative;margin:14px 0}
-.zn{position:absolute;left:14px;transform:translateY(50%);font-size:10.5px;font-weight:600;color:#9aa09b;letter-spacing:.04em;white-space:nowrap}
-.zn.on{color:var(--ink)}.zc{position:absolute;left:0;width:9px;border-top:1px solid #b9bdb6}.zn.on{font-weight:800}
-.th-read{display:flex;flex-direction:column;justify-content:center;gap:4px}
-.th-num{font:700 88px/0.95 "JetBrains Mono",monospace;letter-spacing:-.04em}
-.th-lbl{align-self:flex-start;color:#fff;font-weight:700;letter-spacing:.06em;padding:4px 10px;border-radius:6px;font-size:14px}
-.th-act{font-size:20px;font-weight:600;margin:8px 0 6px}
-.th-parts{display:flex;gap:22px;margin:4px 0 0}.th-parts dt{font-size:12px;color:var(--mut)}.th-parts dd{margin:0;font:700 22px "JetBrains Mono",monospace}
-
-.rd{border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color .15s}
-.rd.cur{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
-.rd header{display:flex;justify-content:space-between;align-items:baseline}.rd header b{font-size:16px}.rd header span{font:500 14px "JetBrains Mono",monospace;color:var(--mut)}
-.rd-l{display:grid;grid-template-columns:12px 110px minmax(0,1fr);gap:8px;align-items:center;font-size:14px}
-.dot{width:10px;height:10px;border-radius:50%}.rd-l .k{color:var(--mut)}.rd-l .v{font-weight:600}
-.rd-a{margin:4px 0 0;font-weight:600}.rd-a.arr{color:var(--green)}
-.asof{text-align:right}
-.chart-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px}
-.chartbox{position:relative;padding-right:106px}.lvs{position:absolute;top:0;right:0;bottom:0;width:102px;pointer-events:none}.lvs .lv{position:absolute;left:4px;transform:translateY(-50%);white-space:nowrap}.bands{width:100%;height:400px;display:block}
-#strip{margin-top:6px}#strip svg{width:100%;height:70px;display:block}
-.lv{font:500 11px "JetBrains Mono",monospace;color:var(--mut)}.lv.sell{color:var(--red);font-weight:700}
-.ax{font:500 11px "JetBrains Mono",monospace;fill:var(--mut)}.grid{stroke:#000;stroke-opacity:.06}
-.hx{stroke:#111;stroke-width:1;opacity:0}
-.tip .tsep{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.2);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#a9b0aa}.tip .tg{display:flex;align-items:center;gap:6px}.tip .tg i{width:10px;height:3px;border-radius:2px;background:#3fbf6a}.tip .tg b{font-family:"JetBrains Mono",monospace}
-.tip{position:absolute;top:10px;opacity:0;pointer-events:none;background:#141714;color:#fff;border-radius:8px;padding:8px 10px;font-size:12.5px;display:flex;flex-direction:column;gap:1px;min-width:170px;transition:opacity .1s}
-.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--mut);margin-top:10px}.legend span{display:flex;align-items:center;gap:6px}
-.legend i{width:18px;height:3px;border-radius:2px;display:inline-block}.legend i.sw{height:10px}
-.strip-l{font-size:12px;color:var(--mut);margin-top:10px}
-.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px}
-#inv{display:flex;flex-direction:column;gap:14px}
-.qa{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px}
-.qn{width:24px;height:24px;border-radius:50%;background:#ecebe4;font:700 12px "JetBrains Mono",monospace;display:grid;place-items:center}
-.q{margin:0;color:var(--mut);font-size:13.5px}.a{margin:2px 0 0;font-size:17px;font-weight:700;text-wrap:pretty}.w{margin:2px 0 0;font-size:13.5px;text-wrap:pretty}
-.sc{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:4px}
-.sc th{text-align:left;font-weight:600;color:var(--mut);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
-.sc th:not(:first-child),.sc td:not(:first-child){text-align:center;font-family:"JetBrains Mono",monospace}
-.sc td{padding:8px;border-bottom:1px solid var(--line)}
-.sc th.hc{color:var(--ink)}.sc tr.hr td{background:#f6f5f0}.sc td.now{background:var(--ink)!important;color:#fff;font-weight:700;border-radius:4px}
-.sc.sell{margin-top:14px}
-.proof{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:0}
-.pf{border:1px solid var(--line);border-radius:10px;padding:10px 12px}.pf dt{font-size:12.5px;color:var(--mut)}.pf dd{margin:2px 0 0;font-weight:600}
-details.card summary{cursor:pointer;font-weight:700;font-size:17px}
-details ol{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
-.cal-h{display:flex;gap:12px;align-items:center;margin-bottom:6px}.cal-h .eyebrow,.cal-re .eyebrow{margin:0}.cal-sw{width:14px;align-self:stretch;border-radius:4px;flex:none}.cal-re{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
-#dist{display:flex;flex-direction:column;gap:14px}.ds header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-bottom:6px;font-size:13.5px}.ds-bar{display:flex;height:22px;border-radius:6px;overflow:hidden}.ds-l{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:12px;color:var(--mut)}.ds-l span{display:flex;align-items:center;gap:5px}.ds-l i{width:9px;height:9px;border-radius:2px}
-.foot{font-size:12px;color:var(--mut);text-align:center}
-@media(max-width:860px){.hero,.two,#today{grid-template-columns:minmax(0,1fr)}.th-num{font-size:80px}.bands{height:320px}}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}.tabs button{border:0;background:none;font:inherit;font-weight:600;font-size:15px;padding:10px 14px;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
-.view{display:flex;flex-direction:column;gap:18px}.view[hidden]{display:none}
-.inf{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;align-items:start}
-.hist{position:sticky;top:12px;display:flex;flex-direction:column;gap:10px;padding:14px}
-.hist h2{margin:0;font-size:16px}.hist .seg button{padding:6px 10px;font-size:13px}
-.hl{display:flex;flex-direction:column;max-height:560px;overflow:auto;margin:0 -6px;padding:0 6px}
-.hi{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px;border-radius:8px;border:0;background:none;font:inherit;text-align:left;cursor:pointer;color:var(--ink)}
-.hi:hover{background:#f1f0ea}.hi.on{background:var(--ink);color:#fff}.hi.on .hs{color:#d6d8d3}
-.hi b{font-size:13.5px}.hi .cg{font:700 10px "JetBrains Mono",monospace;letter-spacing:.05em;color:var(--red);align-self:center}.hi.on .cg{color:#ffb4a8}
-.hs{grid-column:1/-1;display:flex;gap:10px;font-size:12px;color:var(--mut)}.hs span{display:flex;align-items:center;gap:5px}.hs i{width:8px;height:8px;border-radius:50%}
-.hmore{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px;font:inherit;font-weight:600;cursor:pointer}
-.sheet-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.sheet-bar .nav{display:flex;gap:6px}
-.btn{white-space:nowrap;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 12px;font:inherit;font-weight:600;cursor:pointer;color:var(--ink)}.btn.pri{background:var(--ink);color:#fff;border-color:var(--ink)}.btn:disabled{opacity:.4;cursor:default}
-.sheet{background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.05);max-width:816px;padding:38px 46px;display:flex;flex-direction:column;gap:9px;font-size:13.3px;line-height:1.42}
-.rp-hd{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--ink);padding-bottom:8px}.rp-hd h1{margin:0;font-size:24px;letter-spacing:-.02em}.rp-hd p{margin:2px 0 0;color:var(--mut);font-size:12px}.rp-dt{text-align:right}.rp-dt b{display:block;font:700 15px "JetBrains Mono",monospace}
-.rp-eb{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);font-weight:700;margin:0 0 5px}
-.rp-verd,.rp-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.rp-vc{border:1px solid var(--line);border-radius:8px;padding:8px 11px;display:flex;flex-direction:column;gap:4px}.rp-vc header{display:flex;justify-content:space-between;align-items:baseline}.rp-vc header b{font-size:16px}.rp-vc header span{font:700 14px "JetBrains Mono",monospace}
-.rp-chips{display:flex;flex-wrap:wrap;gap:6px}.rp-chip{display:inline-block;font:700 10px "JetBrains Mono",monospace;letter-spacing:.05em;padding:2px 6px;border-radius:4px}
-.rp-v{margin:0;font-size:14.5px;font-weight:700;text-wrap:pretty}.rp-w{margin:0;color:var(--mut);font-size:12px;text-wrap:pretty}
-.rp-t{width:100%;border-collapse:collapse;font-size:12px}.rp-t th{text-align:left;font-weight:600;color:var(--mut);font-size:10.5px;padding:4px 6px;border-bottom:1px solid var(--ink)}.rp-t td{padding:3px 6px;border-bottom:1px solid var(--line);vertical-align:top}
-.rp-t th:not(:first-child),.rp-t td:not(:first-child){text-align:right;font-family:"JetBrains Mono",monospace}
-.rp-kpi th:last-child,.rp-t td.rp-g{text-align:left!important;font-family:"Instrument Sans",sans-serif!important;color:var(--mut);font-size:10.5px}.rp-kpi td.rp-g{width:34%}.rp-kpi td:not(:first-child):not(.rp-g){white-space:nowrap}
-.rp-lv td:first-child{font-size:11px}.rp-lv td:not(:first-child){white-space:nowrap}.rp-t small{display:block;color:var(--mut);font-size:9.5px;line-height:1.1}
-.rp-pos{color:var(--green)}.rp-neg{color:var(--red)}.rp-m{color:var(--mut)}.rp-cold{color:var(--cold)}
-.h-blocks{display:flex;flex-direction:column;gap:18px}.h-block{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:14px}
-.h-bh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.h-bh .sm{white-space:nowrap}.h-bh h3{margin:0;font-size:19px}.h-coin{font:700 12px "JetBrains Mono",monospace;letter-spacing:.06em;padding:4px 8px;border-radius:6px;color:#fff}.h-coin.btc{background:#e08a1e}.h-coin.eth{background:#5b6bbf}
-.h-block .h-sums{margin:0}.h-days{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:6px 0 8px}.h-days div{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:6px}.h-days b{font:700 22px "JetBrains Mono",monospace}.h-days span{font-size:12px;color:var(--mut)}
-.h-t td b{font-weight:700}
-.sp-rg{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}.sp-rg button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 10px;font-weight:600;font-size:12.5px;font-family:inherit;line-height:1.2;white-space:nowrap;cursor:pointer;color:var(--ink)}.sp-rg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.sp-ch{position:relative;margin-bottom:12px}.sp-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--mut);margin-top:4px}.sp-leg span{display:flex;align-items:center;gap:5px}.sp-leg i{width:12px;height:3px;border-radius:2px;display:inline-block}.sp-ph i{margin-left:6px}.sp-tip{pointer-events:none}
-.sp-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;align-items:end;margin-bottom:12px}.sp-ss{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.sp-s{display:flex;flex-direction:column}.sp-s span{font-size:11.5px;color:var(--mut)}.sp-s b{font:700 20px "JetBrains Mono",monospace}.sp-s small{font-size:11px;color:var(--mut)}
-.sp-tr{position:relative;height:12px;border-radius:6px;overflow:visible}.sp-tr em{position:absolute;top:0;bottom:0}.sp-tr em:first-child{border-radius:6px 0 0 6px}.sp-tr em:nth-of-type(6){border-radius:0 6px 6px 0}.sp-m{position:absolute;top:-4px;width:4px;height:20px;border-radius:2px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}.sp-m.mv{background:#8a918b;height:14px;top:-1px}.sp-m.m30{background:#3d6fbf}.sp-m.m90{background:#141714}
-.sp-tk{display:flex;justify-content:space-between;font:500 10px "JetBrains Mono",monospace;color:var(--mut);margin-top:6px}.sp-k{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px 0 10px;vertical-align:-1px}.sp-k:first-child{margin-left:0}.sp-k.mv{background:#8a918b}.sp-k.m30{background:#3d6fbf}.sp-k.m90{background:#141714}
-.sp-h{font-size:15px;margin:6px 0 12px}.sp-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.sp-t{border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;opacity:.8}.sp-t.on{opacity:1;box-shadow:0 0 0 2px var(--c) inset}
-.sp-t header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.sp-n{width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;font:700 12px "JetBrains Mono",monospace;display:grid;place-items:center}.sp-now{margin-left:auto;font:700 10px "JetBrains Mono",monospace;background:var(--c);color:#fff;padding:2px 6px;border-radius:4px}.sp-q{margin:0;font-weight:600;font-size:13px}.sp-r{margin:0;font-size:11.5px;color:var(--mut)}
-.sp-t ul{list-style:none;margin:2px 0;padding:0;font-size:12px}.sp-t li.ok{color:var(--green)}.sp-t li.no{color:var(--mut)}.sp-a{margin:2px 0;font-size:13px}.sp-b{margin:2px 0 0;font-size:11.5px;color:var(--mut);border-top:1px solid var(--line);padding-top:5px}
-@media(max-width:760px){.sp-top{grid-template-columns:minmax(0,1fr)}}
-.h-cal{display:flex;flex-wrap:wrap;gap:8px}.h-cal label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mut);font-weight:600}.h-cal input{font:500 13px "JetBrains Mono",monospace;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--card);color:var(--ink)}
-.h-rng{margin:0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.h-rng .eyebrow{margin:0}.h-rng b{font-size:14px}
-.h-rg{display:grid;grid-template-columns:118px 88px minmax(60px,1fr);gap:2px 10px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:13px}.h-rg .k{color:var(--mut)}.h-rg .v{font:700 13px "JetBrains Mono",monospace;text-align:right}.h-rg .r{grid-column:2/-1;font:500 11px "JetBrains Mono",monospace;color:var(--mut)}
-.h-rbar{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,#8fc0f0,#d8dcd6 50%,#ee9b4a)}.h-rbar i{position:absolute;top:-4px;width:4px;height:14px;background:var(--ink);border-radius:2px;box-shadow:0 0 0 2px #fff;transform:translateX(-50%)}
-.h-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}.h-ctl .seg button{padding:6px 11px;font-size:13px}
-.h-sums{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:14px}.h-sum{border:1px solid var(--line);border-radius:10px;padding:10px 14px}.h-sum .eyebrow{margin:0}.h-big{margin:2px 0 8px;font:700 22px "JetBrains Mono",monospace}.h-big small{font-size:13px}.h-sum .sm{margin:0}
-.h-wrap{overflow:auto;max-height:640px;border:1px solid var(--line);border-radius:10px}
-.h-t{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}.h-t th{position:sticky;top:0;background:#f1f0ea;text-align:left;font-weight:600;color:var(--mut);font-size:11.5px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}.h-t thead tr:nth-child(2) th{top:29px}
-.h-t th.h-grp{color:var(--ink);font-size:12.5px;border-left:1px solid var(--line)}.h-t td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
-.h-t td.h-num{font-family:"JetBrains Mono",monospace;text-align:right}.h-t td small{display:block;font-size:10.5px;color:var(--mut)}.h-t td small.rp-pos{color:var(--green)}.h-t td small.rp-neg{color:var(--red)}
-.h-pill{font:700 10px "JetBrains Mono",monospace;letter-spacing:.03em;padding:2px 6px;border-radius:4px;white-space:nowrap}
-.h-buy{color:var(--cold);font-weight:700}.h-sell{color:var(--red);font-weight:700}.h-arr{color:var(--green);font-weight:700}
-.h-t tr.h-ev td{background:#fbfaf5}.h-evt{white-space:normal!important;min-width:200px;max-width:260px}.h-evt span{display:block;font-size:12px}
-.h-open{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}.h-open:hover{color:var(--cold)}
-.rp-th{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.rp-tc{border:1px solid var(--line);border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:10px}.rp-tn{grid-column:1/-1;margin:0;font-weight:700;font-size:14px}
-.rp-gg{display:grid;grid-template-columns:112px minmax(0,1fr);gap:2px 12px;align-items:center;min-width:0}.rp-gg+.rp-gg{border-top:1px solid var(--line);padding-top:9px}.rp-gh{grid-column:1/-1;display:flex;align-items:center;gap:6px}.rp-hz{font:700 10px "JetBrains Mono",monospace;letter-spacing:.06em;padding:2px 6px;border-radius:4px;color:#fff}.rp-hz.sth{background:#3d6fbf}.rp-hz.lth{background:#0d7a2f}.rp-gr{font-size:10.5px;color:var(--mut);white-space:nowrap}
-.rp-gv{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px}.rp-gv b{font:700 30px/1 "JetBrains Mono",monospace;letter-spacing:-.03em}.rp-pill{max-width:100%;white-space:normal;line-height:1.25;font:700 9.5px "JetBrains Mono",monospace;letter-spacing:.04em;padding:3px 6px;border-radius:4px}
-.rp-rc{min-width:0}.rp-track{position:relative;height:12px;margin:8px 0 3px}.rp-track em{position:absolute;top:0;bottom:0;border-right:1.5px solid #fff}.rp-track em:first-child{border-radius:6px 0 0 6px}.rp-track em:last-of-type{border-radius:0 6px 6px 0;border-right:0}
-.rp-track i{position:absolute;top:-5px;width:5px;height:22px;background:var(--ink);border-radius:3px;box-shadow:0 0 0 2px #fff;transform:translateX(-50%)}.rp-track s{position:absolute;top:-3px;width:3px;height:18px;background:var(--ink);opacity:.3;border-radius:2px;transform:translateX(-50%)}
-.rp-ticks{display:flex;justify-content:space-between;font:500 9px "JetBrains Mono",monospace;color:var(--mut)}
-.rp-gs{grid-column:1/-1;margin:2px 0 0;font-size:10.5px;color:var(--mut);line-height:1.35}
-.rp-bar{position:relative;height:8px;border-radius:4px;background:linear-gradient(90deg,#1f4e9c 0%,#8fc0f0 28%,#d8dcd6 42%,#d8dcd6 58%,#f7e6a0 66%,#ee9b4a 80%,#c0392b 100%);margin:3px 0 2px;min-width:110px}
-.rp-bar i{position:absolute;top:-3px;width:4px;height:14px;background:var(--ink);border-radius:2px;box-shadow:0 0 0 2px #fff;transform:translateX(-50%)}.rp-bar s{position:absolute;top:-2px;width:2px;height:12px;background:var(--ink);opacity:.35;transform:translateX(-50%)}
-.rp-fn{margin:5px 0 0;font-size:10.5px;color:var(--mut);text-wrap:pretty}
-.rp-note{background:var(--bg);border-radius:8px;padding:9px 12px;font-size:12px;text-wrap:pretty}.rp-note p{margin:0}.rp-note p+p{margin-top:4px}
-.rp-ft{border-top:1px solid var(--line);padding-top:6px;margin-top:6px;font-size:10px;color:var(--mut);display:flex;flex-direction:column;gap:2px}.rp-ft p{margin:0;text-wrap:pretty}
-@media(max-width:980px){.inf{grid-template-columns:minmax(0,1fr)}.hist{position:static}.hl{max-height:260px}}
-@media(max-width:640px){.sheet{padding:20px}.rp-verd,.rp-two,.rp-th{grid-template-columns:minmax(0,1fr)}}
-@media print{body{background:#fff}.wrap>*:not(#view-informe),.hist,.sheet-bar{display:none!important}.wrap{padding:0;max-width:none}.inf{display:block}.sheet{border:0;box-shadow:none;max-width:none;padding:0;font-size:10pt}}
-@media(max-width:520px){.th-wrap{grid-template-columns:20px 32px 100px minmax(0,1fr);gap:6px}.th-num{font-size:64px}.rd-l{grid-template-columns:12px 92px minmax(0,1fr)}}
-</style></head>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bambu Cima · Decisión de capital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="app/styles.css" />
+<link rel="stylesheet" href="pro/stylePro.css" />
+</head>
 <body>
-<div class="wrap">
-<header class="top">
-<div class="brand"><h1>Bambú CIMA 2.0</h1><span>Temperatura del mercado · on-chain</span><span class="upd" id="upd"></span></div>
-<div class="seg" id="coin"><button data-t="BTC">Bitcoin</button><button data-t="ETH">Ethereum</button></div>
-</header>
-<nav class="tabs" id="tabs"><button data-v="panel">Panel</button><button data-v="informe">Informe CIMA</button><button data-v="historial">Historial de lecturas</button></nav>
-<div class="view" id="view-panel">
-<section class="hero"><div class="card" id="th-sth"></div><div class="card" id="th-lth"></div><p id="combo" class="combo"></p></section>
-<section class="card"><div class="chart-head"><div><h2>Lectura de hoy</h2><p class="sub">Los dos termómetros se leen por separado: STH dice cuándo, LTH dice cuánto.</p></div></div><div id="today"></div></section>
-<section class="card"><h2>Qué esperar en esta zona</h2><p class="sub">Nota de calendario según la zona del termómetro STH de hoy.</p><div id="cal"></div></section>
-<section class="card"><div class="chart-head"><div><h2>Supply in Profit y fases del corto</h2><p class="sub">Qué porcentaje de las monedas recientes está en ganancia, y en cuál de las 4 fases del corto estamos.</p></div></div><div id="sup"></div></section>
-<section class="card"><div class="chart-head"><div><h2><span class="hz sth">STH</span> Bandas de temperatura · corto</h2><p class="sub" id="sub-sth"></p></div><div class="seg" id="range-sth"></div></div>
-<div id="chart-sth" class="chartbox"></div>
-<div class="legend"><span><i style="background:#111"></i>Precio</span><span><i style="background:#0d7a2f"></i>Coste STH</span><span><i style="background:#c0392b;height:4px"></i>Banda de venta</span><span><i class="sw" style="background:linear-gradient(90deg,#1f4e9c,#8fc0f0)"></i>azul = frío, comprar</span><span><i class="sw" style="background:linear-gradient(90deg,#f7e6a0,#ee9b4a,#c0392b)"></i>rojo = caliente, vender</span><span><svg width="12" height="10"><path d="M6 0l6 10H0z" fill="#0d7a2f"></path></svg>Arranque de ciclo</span></div></section>
-<section class="card"><div class="chart-head"><div><h2><span class="hz lth">LTH</span> Bandas de temperatura · ciclo</h2><p class="sub" id="sub-lth"></p></div><div class="seg" id="range-lth"></div></div>
-<div id="chart-lth" class="chartbox"></div>
-<div class="legend"><span><i style="background:#111"></i>Precio</span><span><i style="background:#0d7a2f"></i>Coste LTH</span><span><i class="sw" style="background:linear-gradient(90deg,#1f4e9c,#8fc0f0)"></i>azul = frío, comprar</span><span><i class="sw" style="background:linear-gradient(90deg,#f7e6a0,#ee9b4a,#e0703a)"></i>rojo = caliente, vender</span></div>
-<p class="muted sm">Sin banda de venta: el coste LTH no sirve para vender (a +2,5σ / +3σ el precio seguía subiendo). Las ventas las marca siempre el lado STH. El termómetro LTH se lee del NUPL, no de esta z.</p></section>
-<section class="two">
-<div class="card"><div class="chart-head"><div><h2>Modo inversor</h2><p class="sub" id="inv-sub"></p></div>
-<div class="seg" id="mode"><button data-m="fondo">Fondo</button><button data-m="retail">Retail</button></div></div>
-<div id="inv"></div></div>
-<div class="card"><h2>Escala de ejecución</h2><p class="sub">Cuánto mover hoy. La celda negra es la de hoy.</p><div id="scale"></div></div>
-</section>
-<section class="card"><h2>Por qué confiar</h2><p class="sub">Retornos posteriores a cada señal, backtest 2017+ con ventana móvil de 4 años. Entre paréntesis, % de veces que subió.</p><dl class="proof" id="proof"></dl>
-<p class="muted sm">El índice funciona en los extremos y a horizonte medio-largo (6–12 meses); el templado es neutro.</p></section>
-<section class="card"><h2>Reparto de las zonas STH</h2><p class="sub">Por qué el sistema acumula por tramos y vende sólo en picos raros.</p><div id="dist"></div></section>
-<details class="card"><summary>Acerca de la metodología</summary>
-<p>Trabajamos con los ciclos que existen (BTC desde 2010, ETH desde ~2017); no hay más historia.</p>
-<ol><li>Pocos ciclos → el sistema se recalibra al cierre de cada ciclo nuevo (está vivo, aprende).</li><li>Contar aciertos por episodios, no por días.</li><li>ETH cambió con The Merge (2022) → calibrar cada moneda por separado, pesar más lo reciente.</li><li>Fuente única → contrastar de vez en cuando el coste STH contra otra fuente.</li></ol>
-<p>Es sólido dentro de lo que los datos permiten, y está diseñado para aprender, no para ser perfecto.</p>
-<p class="muted sm">Cálculo: z = desviación del ratio precio / coste STH frente a su media móvil de 1.460 días (mínimo 200). Termómetro STH = anclas de z + ajuste por SOPR de corto (EMA 7): (SOPR−1)×120 bajo 1, (SOPR−1)×60 sobre 1. Frontera de venta BTC recalibrada a 1,75σ (antes 2,5σ). Fase de ciclo por NUPL de largo. Datos diarios desde 2017 · fuente ChartInspect. No usa CDD.</p>
-</details>
+
+<div id="gate" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#182420;padding:24px;font-family:'IBM Plex Sans',sans-serif;">
+  <div style="width:100%;max-width:380px;background:#20302A;border-radius:16px;padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+    <div style="font-family:'IBM Plex Mono',monospace;color:#EAD98A;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;">Acceso piloto</div>
+    <h1 style="color:#EDE7D2;font-size:22px;margin:0 0 22px;">Bambu Cima</h1>
+
+    <form id="gate-form">
+      <label style="display:block;color:#B8C4BD;font-size:13px;margin-bottom:6px;">Nombre</label>
+      <input id="gate-nombre" required style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid #3A4B43;background:#1A2621;color:#EDE7D2;font-size:15px;margin-bottom:14px;" />
+      <label style="display:block;color:#B8C4BD;font-size:13px;margin-bottom:6px;">Correo</label>
+      <input id="gate-correo" type="email" required style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:8px;border:1px solid #3A4B43;background:#1A2621;color:#EDE7D2;font-size:15px;margin-bottom:20px;" />
+      <button type="submit" style="width:100%;padding:13px;border:none;border-radius:8px;background:#EAD98A;color:#1A2621;font-weight:600;font-size:15px;cursor:pointer;">Entrar</button>
+      <div id="gate-error" style="display:none;color:#E39A9A;font-size:12.5px;margin-top:10px;">No se pudo registrar tu acceso. Intenta de nuevo.</div>
+    </form>
+  </div>
 </div>
-<div class="view" id="view-informe" hidden>
-<div class="inf">
-<aside class="card hist"><h2>Historial de informes</h2><div class="seg" id="hf"><button data-f="all" class="on">Todos</button><button data-f="chg">Sólo cambios</button><button data-f="sig">Con señal</button></div><div class="hl" id="hl"></div><button class="hmore" id="hmore">Cargar 90 días más</button><p class="muted sm" style="margin:0">Un informe por cierre diario. “Cambio” marca los días en que la acción o la zona STH cambió respecto al día anterior.</p></aside>
-<div><div class="sheet-bar"><div class="nav"><button class="btn" id="prev">← Anterior</button><button class="btn" id="next">Siguiente →</button><button class="btn" id="latest">Último</button></div><button class="btn pri" id="print">Imprimir / PDF</button></div>
-<article class="sheet" id="sheet"></article></div>
-</div>
-</div>
-<div class="view" id="view-historial" hidden>
-<section class="card"><div class="chart-head"><div><h2>Historial de lecturas diarias</h2><p class="sub">Una lectura por cierre diario: precio, termómetros STH y LTH, fase de ciclo, acción y los hechos que cambiaron ese día. Pulsa una fecha para abrir su informe.</p></div><button class="btn" id="h-csv">Descargar CSV</button></div>
-<div class="h-ctl"><div class="seg" id="h-days"><button data-v="180">180 días</button><button data-v="365">1 año</button><button data-v="730">2 años</button><button data-v="max">Máx.</button></div><div class="h-cal"><label>Desde <input type="date" id="h-from"></label><label>Hasta <input type="date" id="h-to"></label></div><div class="seg" id="h-coin"><button data-v="both">BTC y ETH</button><button data-v="BTC">BTC</button><button data-v="ETH">ETH</button></div><div class="seg" id="h-only"><button data-v="all">Todas</button><button data-v="ev">Sólo días con cambios</button></div></div>
-<p class="h-rng"><span class="eyebrow">Rango</span> <b id="h-rng"></b></p>
-</section>
-<div id="h-blocks" class="h-blocks"></div>
-</div>
-<p class="foot">Contenido educativo, no asesoramiento financiero. Invertir en criptoactivos conlleva riesgo de pérdida.</p>
-</div>
-<script src="bambu2/data.js"></script>
-<script src="bambu2/engine.js"></script>
-<script src="bambu2/app.js"></script>
-<script src="bambu2/supply.js"></script>
-<script src="bambu2/report.js"></script>
-<script src="bambu2/hist.js"></script>
-<script>(function(){
-const Rp=window.Bambu2Report,D=Rp.dates(),$=s=>document.querySelector(s);
-let days=90,filt="all",cur=localStorage.getItem("b2_inf_iso")||D[D.length-1];if(D.indexOf(cur)<0)cur=D[D.length-1];
-const fs=iso=>new Date(iso+"T00:00:00Z").toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});
-function list(){const H=Rp.history(days).filter(h=>filt==="all"||(filt==="chg"?h.change:h.sig));
- $("#hl").innerHTML=H.length?H.map(h=>`<button class="hi${h.iso===cur?" on":""}" data-iso="${h.iso}"><b>${fs(h.iso)}</b>${h.change?'<span class="cg">CAMBIO</span>':"<span></span>"}<span class="hs"><span><i style="background:${h.btc.z.col}"></i>BTC · ${h.btc.a}</span><span><i style="background:${h.eth.z.col}"></i>ETH · ${h.eth.a}</span></span></button>`).join(""):'<p class="muted sm">Sin informes con este filtro en el periodo.</p>';
- document.querySelectorAll(".hi").forEach(b=>b.onclick=()=>show(b.dataset.iso));}
-function show(iso){cur=iso;localStorage.setItem("b2_inf_iso",iso);$("#sheet").innerHTML=Rp.html(iso);const k=D.indexOf(iso);$("#prev").disabled=k<=8;$("#next").disabled=k>=D.length-1;$("#latest").disabled=k===D.length-1;list();}
-$("#prev").onclick=()=>show(D[D.indexOf(cur)-1]);$("#next").onclick=()=>show(D[D.indexOf(cur)+1]);$("#latest").onclick=()=>show(D[D.length-1]);
-$("#print").onclick=()=>window.print();$("#hmore").onclick=()=>{days+=90;list();};
-document.querySelectorAll("#hf button").forEach(b=>b.onclick=()=>{filt=b.dataset.f;document.querySelectorAll("#hf button").forEach(x=>x.classList.toggle("on",x===b));list();});
-function view(v){localStorage.setItem("b2_view",v);document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));$("#view-panel").hidden=v!=="panel";$("#view-informe").hidden=v!=="informe";$("#view-historial").hidden=v!=="historial";$("#coin").style.display=v==="panel"?"":"none";if(v==="informe"){cur=localStorage.getItem("b2_inf_iso")||cur;show(cur);}if(v==="historial")window.Bambu2Hist.render();window.scrollTo(0,0);}
-window.Bambu2View=view;
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>view(b.dataset.v));
-view(location.hash==="#informe"?"informe":location.hash==="#historial"?"historial":localStorage.getItem("b2_view")||"panel");
-})();</script>
-<script>(function(){var D=window.BAMBU2_DATA,d=D&&D.BTC&&D.BTC.d;if(!d)return;var iso=d[d.length-1];document.getElementById("upd").textContent="Actualizado: "+new Date(iso+"T00:00:00Z").toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"});})();</script>
-</body></html>
+
+<div id="root" style="display:none;"></div>
+
+<script>
+(function () {
+  var KEY = "bambu_cima_access_v2";
+  function showApp() {
+    document.getElementById("gate").style.display = "none";
+    document.getElementById("root").style.display = "block";
+  }
+  /* ---------------------------------------------------------------
+     GOOGLE FORMS · pega aquí los 3 datos de TU formulario.
+     Cómo obtenerlos: ver automatizacion/registro-google-forms.md
+     --------------------------------------------------------------- */
+  var GFORM = {
+    formId: "1FAIpQLScigKX2chZGNPwsfhtdtmwZqpVq3hM_z8FG9WWfVTWP0Fh6Pw",
+    nombre: "entry.1258144612",
+    correo: "entry.900875673"
+  };
+
+  function registerLead(nombre, correo) {
+    if (!GFORM.formId) return Promise.resolve();
+    var body = new URLSearchParams();
+    body.append(GFORM.nombre, nombre);
+    body.append(GFORM.correo, correo);
+    var url = "https://docs.google.com/forms/d/e/" + GFORM.formId + "/formResponse";
+    // mode no-cors: Google recibe el dato aunque el navegador no pueda leer la respuesta
+    return fetch(url, { method: "POST", mode: "no-cors", body: body });
+  }
+  var saved = localStorage.getItem(KEY);
+  if (saved) { showApp(); return; }
+
+  document.getElementById("gate-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var nombre = document.getElementById("gate-nombre").value.trim();
+    var correo = document.getElementById("gate-correo").value.trim();
+    var done = function () {
+      localStorage.setItem(KEY, JSON.stringify({ nombre: nombre, correo: correo, via: "correo", fecha: new Date().toISOString() }));
+      showApp();
+    };
+    registerLead(nombre, correo).then(done).catch(done);
+  });
+
+})();
+</script>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="32" height="32" rx="7" fill="#22402F"/>
+    <path d="M13 8v16M19 8v16" stroke="#EDE7D2" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M13 13h6M13 18h6" stroke="#EAD98A" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Datos y motor (JS plano) -->
+<script src="app/data.js"></script>
+<script src="app/engine.js"></script>
+<script src="app/glossary.js"></script>
+<script src="app/btc_real.js"></script>
+<script src="app/eth_real.js"></script>
+<script src="app/history.js"></script>
+<script src="app/cycle.js"></script>
+<script src="app/extras.js"></script>
+<script src="app/live.js"></script>
+
+<!-- Componentes y secciones reales de Bambu + (JSX) -->
+<script type="text/babel" src="app/tweaks-panel.jsx"></script>
+<script type="text/babel" src="app/components.jsx"></script>
+<script type="text/babel" src="app/charts2.jsx"></script>
+<script type="text/babel" src="app/sectionsCore.jsx"></script>
+<script type="text/babel" src="app/sectionsPreguntas.jsx"></script>
+<script type="text/babel" src="app/sectionsMore.jsx"></script>
+<script type="text/babel" src="app/sectionsHistorial.jsx"></script>
+<script type="text/babel" src="app/sectionsCiclosZona.jsx"></script>
+<script type="text/babel" src="app/sectionsHist.jsx"></script>
+<script type="text/babel" src="app/sectionsCycle.jsx"></script>
+<script type="text/babel" src="app/sectionsBlog.jsx"></script>
+<script type="text/babel" src="app/sectionsMarket.jsx"></script>
+<script type="text/babel" src="app/sectionsOnchainHeat.jsx"></script>
+<script type="text/babel" src="app/sectionsCartera.jsx"></script>
+<script type="text/babel" src="app/sectionsDecision.jsx"></script>
+<script type="text/babel" src="app/sectionsReport.jsx"></script>
+<script type="text/babel" src="app/reportCharts.jsx"></script>
+<script type="text/babel" src="app/supplyProfit.jsx"></script>
+<script type="text/babel" src="app/sectionsMensual.jsx"></script>
+<script type="text/babel" src="app/sectionsGuia.jsx"></script>
+
+<!-- Componentes reutilizados de Bambu S -->
+<script type="text/babel" src="sbambu/chartsS.jsx"></script>
+<script type="text/babel" src="sbambu/dcaS.jsx"></script>
+
+<!-- Shell de Bambu Cima -->
+<script type="text/babel" src="pro/appPro.jsx"></script>
+</body>
+</html>
