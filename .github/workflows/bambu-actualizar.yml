@@ -1,0 +1,59 @@
+# Actualiza los datos de Bambú Cima (y bambu2/data.js) con la API de ChartInspect.
+# Corre dos veces al día: ChartInspect a veces publica BTC con 1-2 días de retraso;
+# si aún no hay datos nuevos, no cambia nada.
+name: Bambu · actualizar datos
+
+on:
+  schedule:
+    - cron: "30 7 * * *"
+    - cron: "30 15 * * *"
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [".github/workflows/bambu-actualizar.yml", "automatizacion/bambu-datos.mjs", "automatizacion/traer-chartinspect.mjs"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bambu-datos
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Traer datos nuevos de ChartInspect y Binance
+        env:
+          CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
+        run: node automatizacion/traer-chartinspect.mjs "$RUNNER_TEMP/datos-nuevos.json"
+
+      - name: Añadir los días y recalcular
+        run: node automatizacion/bambu-datos.mjs "$RUNNER_TEMP/datos-nuevos.json"
+
+      - name: Comprobar que los archivos cargan
+        run: |
+          node -e '
+          const fs=require("fs"),vm=require("vm");
+          for (const f of ["app/btc_real.js","app/eth_real.js"]) {
+            const c={window:{}}; vm.runInNewContext(fs.readFileSync(f,"utf8"),c);
+            const D=Object.values(c.window.BambuRealData)[0];
+            for (const k of D.fields) if (D.cols[k].length!==D.dates.length) throw new Error(f+": "+k+" no cuadra");
+            console.log(f, D.count, "días hasta", D.latestIso);
+          }
+          const c={window:{}}; vm.runInNewContext(fs.readFileSync("bambu2/data.js","utf8"),c);
+          console.log("bambu2/data.js hasta", c.window.BAMBU2_DATA.BTC.d.at(-1));'
+
+      - name: Publicar
+        run: |
+          git config user.name "bambu-bot"
+          git config user.email "bambu-bot@users.noreply.github.com"
+          git add app/btc_real.js app/eth_real.js app/history.js bambu2/data.js
+          if git diff --cached --quiet; then echo "Sin datos nuevos"; exit 0; fi
+          git commit -m "datos: actualización automática al $(node -e 'const fs=require("fs");console.log(fs.readFileSync("app/history.js","utf8").match(/BambuDataDate = \"([^\"]+)\"/)[1])')"
+          git push
