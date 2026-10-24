@@ -1,0 +1,27 @@
+name: Bambu · descubrir métricas ChartInspect
+on:
+  push:
+    branches: [bambu-descubrir]
+    paths: [".github/workflows/bambu-descubrir.yml", "automatizacion/descubrir.mjs"]
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  descubrir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Consultar la API
+        env:
+          CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
+        run: node automatizacion/descubrir.mjs
+      - name: Guardar el resultado en esta rama
+        run: |
+          git config user.name "bambu-bot"
+          git config user.email "bambu-bot@users.noreply.github.com"
+          git add automatizacion/descubrimiento.json
+          git commit -m "descubrimiento de métricas ChartInspect" || echo "sin cambios"
+          git push
