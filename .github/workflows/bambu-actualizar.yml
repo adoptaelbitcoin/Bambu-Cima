@@ -1,16 +1,17 @@
 # Actualiza los datos de Bambú Cima (y bambu2/data.js) con la API de ChartInspect.
-# Corre dos veces al día: ChartInspect a veces publica BTC con 1-2 días de retraso;
-# si aún no hay datos nuevos, no cambia nada.
+# Corre una vez al día a las 12:00 hora de España. GitHub solo entiende UTC, así que
+# hay dos horas programadas (10:00 UTC en verano, 11:00 UTC en invierno) y cada día
+# solo sigue la que corresponde al horario vigente en Madrid.
 name: Bambu · actualizar datos
 
 on:
   schedule:
-    - cron: "30 7 * * *"
-    - cron: "30 15 * * *"
+    - cron: "0 10 * * *"   # 12:00 en Madrid con horario de verano (UTC+2)
+    - cron: "0 11 * * *"   # 12:00 en Madrid con horario de invierno (UTC+1)
   workflow_dispatch: {}
   push:
     branches: [main]
-    paths: [".github/workflows/bambu-actualizar.yml", "automatizacion/bambu-datos.mjs", "automatizacion/traer-chartinspect.mjs"]
+    paths: ["automatizacion/bambu-datos.mjs", "automatizacion/traer-chartinspect.mjs"]
 
 permissions:
   contents: write
@@ -23,20 +24,38 @@ jobs:
   actualizar:
     runs-on: ubuntu-latest
     steps:
+      - name: ¿Son las 12:00 en Madrid?
+        id: hora
+        run: |
+          seguir=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            off=$(TZ=Europe/Madrid date +%z)
+            case "${{ github.event.schedule }}|$off" in
+              "0 10 * * *|+0200"|"0 11 * * *|+0100") ;;
+              *) seguir=false; echo "Hoy toca la otra hora (Madrid $off)";;
+            esac
+          fi
+          echo "seguir=$seguir" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: steps.hora.outputs.seguir == 'true'
       - uses: actions/setup-node@v4
+        if: steps.hora.outputs.seguir == 'true'
         with:
           node-version: "20"
 
       - name: Traer datos nuevos de ChartInspect y Binance
+        if: steps.hora.outputs.seguir == 'true'
         env:
           CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
         run: node automatizacion/traer-chartinspect.mjs "$RUNNER_TEMP/datos-nuevos.json"
 
       - name: Añadir los días y recalcular
+        if: steps.hora.outputs.seguir == 'true'
         run: node automatizacion/bambu-datos.mjs "$RUNNER_TEMP/datos-nuevos.json"
 
       - name: Comprobar que los archivos cargan
+        if: steps.hora.outputs.seguir == 'true'
         run: |
           node -e '
           const fs=require("fs"),vm=require("vm");
@@ -50,6 +69,7 @@ jobs:
           console.log("bambu2/data.js hasta", c.window.BAMBU2_DATA.BTC.d.at(-1));'
 
       - name: Publicar
+        if: steps.hora.outputs.seguir == 'true'
         run: |
           git config user.name "bambu-bot"
           git config user.email "bambu-bot@users.noreply.github.com"
