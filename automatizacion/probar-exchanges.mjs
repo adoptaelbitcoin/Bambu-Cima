@@ -29,7 +29,8 @@ async function get(ruta) {
 }
 const fecha = f => {
   if (f.date) return String(f.date).slice(0, 10);
-  if (f.timestamp) { const t = Number(f.timestamp); return new Date(t > 1e12 ? t : t * 1000).toISOString().slice(0, 10); }
+  const ts = f.timestamp ?? f.timeunix;
+  if (ts) { const t = Number(ts); return new Date(t > 1e12 ? t : t * 1000).toISOString().slice(0, 10); }
   return f.formattedDate ? String(f.formattedDate).slice(0, 10) : null;
 };
 const mediana = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -95,6 +96,15 @@ for (const ruta of ["/exchange-etf/list", "/exchange-etf/exchange-balances?days=
     const c = comparar(serie, B, "exBal"); if (c) res.push(`${k} ${c.err.toFixed(2)}%`);
   }
   if (res.length) log(`  exBal frente a: ${res.join(" | ")}`);
+  // Los flujos de Bambú salen del saldo total: cambio de 1 día (exFlow) y de 30 días (exFlow30)
+  if ("allexchanges" in (filas.at(-1) || {})) {
+    const bal = {}; for (const f of filas) if (fecha(f)) bal[fecha(f)] = Number(f.allexchanges);
+    const dias = Object.keys(bal).sort(), dif = n => Object.fromEntries(dias.map((d, i) => [d, i >= n ? bal[d] - bal[dias[i - n]] : null]));
+    for (const [campo, n] of [["exFlow", 1], ["exFlow30", 30]]) { const c = comparar(dif(n), B, campo); log(`  ${campo} = cambio de ${n} día(s) de allexchanges → ${c ? `error típico ${c.err.toFixed(2)}% (${c.n} días)` : "sin comparación"}`); }
+    log(`  últimos días: ${dias.slice(-5).map(d => `${d} ${Math.round(bal[d])}`).join(" · ")}`);
+    log(`  Bambú antes de pararse: ${B.dates.slice(B.dates.indexOf("2026-09-05"), B.dates.indexOf("2026-09-10")).map(d => `${d} ${B.cols.exBal[B.dates.indexOf(d)]}`).join(" · ")}`);
+    log(`  API esos días: ${["2026-09-05", "2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09"].map(d => `${d} ${Math.round(bal[d])}`).join(" · ")}`);
+  }
 }
 
 writeFileSync(process.argv[2] || "automatizacion/prueba-exchanges.txt", lineas.join("\n") + "\n");
