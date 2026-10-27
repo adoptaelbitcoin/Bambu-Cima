@@ -1,0 +1,30 @@
+Prueba de métricas ChartInspect · 2026-10-27T21:32:46.285Z
+Comparación con Bambú del 2025-09-01 al 2026-09-08; frescura pedida hasta 2026-10-27.
+
+== BTC · objetivo: exBal, exFlow
+exchange-net-position: HTTP 200 · 358 filas · último día 2026-08-24
+exchange-aggregate-balance: HTTP 200 · 358 filas · último día 2026-08-24
+network-estimated-exchange-reserves: HTTP 200 · 349 filas · último día 2026-08-15
+exchange-flow-volume: HTTP 200 · 357 filas · último día 2026-08-23
+network-estimated-exchange-flows: HTTP 200 · 349 filas · último día 2026-08-15
+  exBal: network-estimated-exchange-reserves.heuristic_total_labeled_exchange_reserve_btc → error típico 22.76% (349 días), último valor 2693894.62137919  |  network-estimated-exchange-reserves.total_labeled_exchange_reserve_btc → error típico 36.54% (349 días), último valor 2254122.68367097  |  exchange-net-position.expanded_estimate_balance_btc → error típico 44.32% (349 días), último valor undefined
+  exFlow: exchange-net-position.expanded_estimate_change_daily_negative → error típico 97.13% (159 días), último valor undefined  |  exchange-net-position.net_position_change_daily_btc → error típico 99.53% (358 días), último valor -1109.01346946  |  network-estimated-exchange-reserves.exchange_controller_swissborg_balance_btc → error típico 99.73% (349 días), último valor 41.91257069
+
+== BTC · objetivo: supplyP, sthLoss
+supply-in-profit: HTTP 200 · 422 filas · último día 2026-10-27
+sth-in-profit: HTTP 200 · 422 filas · último día 2026-10-27
+  supplyP: supply-in-profit.percent_btc_in_profit → error típico 0.00% (372 días), último valor 65.78965874837243  |  supply-in-profit.supply_in_profit_percent → error típico 0.00% (372 días), último valor 65.78965874837243  |  sth-in-profit.pct_circulating_lth_in_profit → error típico 11.45% (372 días), último valor 55.107460243486
+  sthLoss: sth-in-profit.calculated_pct_sth_in_loss → error típico 0.00% (372 días), último valor 43.158892858954125  |  sth-in-profit.pct_sth_in_loss → error típico 0.00% (372 días), último valor 43.158892858954125  |  sth-in-profit.lth_percentage → error típico 24.58% (372 días), último valor 81.20852676157672
+
+== ETH · objetivo: lthSupply, lthSupplyPct, lthSoprRaw, lthNet30
+lth-sopr: HTTP 200 · 422 filas · último día 2026-10-27
+lth-net-position: HTTP 200 · 422 filas · último día 2026-10-27
+lth-supply: HTTP 404 · {"success":false,"error":"Metric \"lth-supply\" not found for chain \"ethereum\".","availableMetrics":["a2vr","a2vr-momentum","acdd","active-addresses","active-mvrv","active-mvrv-norm","active-supply-
+  lthSupply: lth-sopr.lth_supply_btc → error típico 0.00% (373 días), último valor 61146109.03435051  |  lth-net-position.lth_supply_btc → error típico 0.00% (373 días), último valor 61146109.03435051  |  lth-net-position.lth_btc_in_profit → error típico 43.91% (373 días), último valor 33477459.26263754
+  lthSupplyPct: lth-sopr.lth_percentage → error típico 0.01% (373 días), último valor 79.760348369096  |  lth-net-position.lth_percentage → error típico 0.01% (373 días), último valor 79.760348369096  |  lth-sopr.sopr → error típico 98.59% (373 días), último valor 0.9920391780986594
+  lthSoprRaw: lth-sopr.lth_sopr → error típico 1.38% (373 días), último valor 0.9268845753693532  |  lth-sopr.sopr → error típico 29.98% (373 días), último valor 0.9920391780986594  |  lth-net-position.lth_position_change_negative → error típico 234.03% (373 días), último valor -70854.77114722133
+  lthNet30: lth-sopr.lth_sopr → error típico 115.96% (373 días), último valor 0.9268845753693532  |  lth-sopr.sopr → error típico 125.74% (373 días), último valor 0.9920391780986594  |  lth-net-position.lth_position_change_negative → error típico 561.34% (373 días), último valor -70854.77114722133
+
+== Endpoint de saldos de exchanges (exige permiso de exchanges)
+/exchange-etf/list: HTTP 200 · {"success":true,"availableDatasets":["exchange-balances","etf-balances"],"count":2}
+/exchange-etf/exchange-balances?days=400&limit=400: HTTP 200 · 399 filas · último día undefined · campos: timeunix, usdprice, blockheight, allexchanges, coinbase, binance, bitfinex, robinhood, upbit, kraken, okx, gemini, bybit, bitflyer, bitstamp, bithumb, coincheck, crypto_com, deribit, boerse_stuttgart
