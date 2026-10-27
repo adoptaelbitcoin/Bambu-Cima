@@ -3,7 +3,7 @@
 // origen de BTC y ETH, y el precio de cierre diario de Binance.
 //
 // Uso:  node automatizacion/traer-chartinspect.mjs <salida.json> [desde AAAA-MM-DD]
-//   Sin "desde": empieza el día siguiente al último que ya tiene app/*_real.js.
+//   Sin "desde": empieza 2 días antes del último que ya tiene app/*_real.js (revisiones).
 //   Escribe { "BTC": { "AAAA-MM-DD": {campo: valor} }, "ETH": {...} } para bambu-datos.mjs.
 // Mapeo comprobado contra los datos ya publicados (oct-2026).
 // ============================================================
@@ -115,7 +115,8 @@ if (import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop(
   const hasta = iso(Date.now() - DIA);
   const out = {};
   for (const [activo, rel] of [["BTC", "app/btc_real.js"], ["ETH", "app/eth_real.js"]]) {
-    const desde = desdeArg || masDias(ultimoDia(rel), 1);
+    // Pide también los 3 últimos días ya publicados, por si ChartInspect los ha revisado
+    const desde = desdeArg || masDias(ultimoDia(rel), -2);
     if (desde > hasta) { console.log(`${activo}: ya está al día`); out[activo] = {}; continue; }
     out[activo] = await traer(activo, desde, hasta);
     console.log(`${activo}: datos de ${desde} a ${hasta}`);

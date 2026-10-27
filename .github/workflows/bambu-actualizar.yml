@@ -1,0 +1,79 @@
+# Actualiza los datos de Bambú Cima (y bambu2/data.js) con la API de ChartInspect.
+# Corre una vez al día a las 12:07 hora de España (fuera de la hora en punto, cuando GitHub más retrasa). GitHub solo entiende UTC, así que
+# hay dos horas programadas (10:07 UTC en verano, 11:07 UTC en invierno) y cada día
+# solo sigue la que corresponde al horario vigente en Madrid.
+name: Bambu · actualizar datos
+
+on:
+  schedule:
+    - cron: "7 10 * * *"   # 12:07 en Madrid con horario de verano (UTC+2)
+    - cron: "7 11 * * *"   # 12:07 en Madrid con horario de invierno (UTC+1)
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["automatizacion/bambu-datos.mjs", "automatizacion/traer-chartinspect.mjs"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bambu-datos
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ¿Toca la ejecución de las 12:07 en Madrid?
+        id: hora
+        run: |
+          seguir=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            off=$(TZ=Europe/Madrid date +%z)
+            case "${{ github.event.schedule }}|$off" in
+              "7 10 * * *|+0200"|"7 11 * * *|+0100") ;;
+              *) seguir=false; echo "Hoy toca la otra hora (Madrid $off)";;
+            esac
+          fi
+          echo "seguir=$seguir" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.hora.outputs.seguir == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.hora.outputs.seguir == 'true'
+        with:
+          node-version: "20"
+
+      - name: Traer datos nuevos de ChartInspect y Binance
+        if: steps.hora.outputs.seguir == 'true'
+        env:
+          CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
+        run: node automatizacion/traer-chartinspect.mjs "$RUNNER_TEMP/datos-nuevos.json"
+
+      - name: Añadir los días y recalcular
+        if: steps.hora.outputs.seguir == 'true'
+        run: node automatizacion/bambu-datos.mjs "$RUNNER_TEMP/datos-nuevos.json"
+
+      - name: Comprobar que los archivos cargan
+        if: steps.hora.outputs.seguir == 'true'
+        run: |
+          node -e '
+          const fs=require("fs"),vm=require("vm");
+          for (const f of ["app/btc_real.js","app/eth_real.js"]) {
+            const c={window:{}}; vm.runInNewContext(fs.readFileSync(f,"utf8"),c);
+            const D=Object.values(c.window.BambuRealData)[0];
+            for (const k of D.fields) if (D.cols[k].length!==D.dates.length) throw new Error(f+": "+k+" no cuadra");
+            console.log(f, D.count, "días hasta", D.latestIso);
+          }
+          const c={window:{}}; vm.runInNewContext(fs.readFileSync("bambu2/data.js","utf8"),c);
+          console.log("bambu2/data.js hasta", c.window.BAMBU2_DATA.BTC.d.at(-1));'
+
+      - name: Publicar
+        if: steps.hora.outputs.seguir == 'true'
+        run: |
+          git config user.name "bambu-bot"
+          git config user.email "bambu-bot@users.noreply.github.com"
+          git add app/btc_real.js app/eth_real.js app/history.js bambu2/data.js
+          if git diff --cached --quiet; then echo "Sin datos nuevos"; exit 0; fi
+          git commit -m "datos: actualización automática al $(node -e 'const fs=require("fs");console.log(fs.readFileSync("app/history.js","utf8").match(/BambuDataDate = \"([^\"]+)\"/)[1])')"
+          git push

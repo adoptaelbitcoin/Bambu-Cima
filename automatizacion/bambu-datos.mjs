@@ -71,9 +71,9 @@ function guardar(rel, B, activo) {
   console.log(`${activo}: ${rel} ahora llega a ${ultimo} (${B.dates.length} días)`);
 }
 
-// ---------- calcular los derivados del último día ----------
-function derivar(B) {
-  const C = B.cols, i = B.dates.length - 1, P = C.price.slice(0, i + 1);
+// ---------- calcular los derivados de un día (por defecto, el último) ----------
+function derivar(B, i = B.dates.length - 1) {
+  const C = B.cols, P = C.price.slice(0, i + 1);
   const set = (f, v) => { if (f in C) C[f][i] = v; };
   set("mayer", r(P[i] / smaAt(P, i, 200), 4));
   set("ma2y", r(P[i] / smaAt(P, i, 730), 4));
@@ -96,9 +96,25 @@ function derivar(B) {
 }
 
 // ---------- añadir los días nuevos de un activo ----------
+const DIAS_REVISION = 3; // ChartInspect corrige a veces los últimos días (sobre todo ETH)
+
 function actualizarActivo(activo, nuevos, hasta) {
   const B = cargar(ARCHIVO[activo]);
-  let dia = sumarDia(B.dates.at(-1)), añadidos = 0;
+  // 1) Corregir los últimos días ya publicados si ChartInspect ha revisado sus valores
+  let desdeIdx = null;
+  for (let i = Math.max(0, B.dates.length - DIAS_REVISION); i < B.dates.length; i++) {
+    const fila = nuevos?.[B.dates[i]];
+    if (!fila) continue;
+    for (const f of CAMPOS_ORIGEN) {
+      const v = fila[f];
+      if (!(f in B.cols) || v == null || !Number.isFinite(v) || v === B.cols[f][i]) continue;
+      console.log(`${activo} ${B.dates[i]}: ${f} corregido ${B.cols[f][i]} → ${v}`);
+      B.cols[f][i] = v; desdeIdx = desdeIdx ?? i;
+    }
+  }
+  if (desdeIdx != null) for (let i = desdeIdx; i < B.dates.length; i++) derivar(B, i);
+  // 2) Añadir los días nuevos
+  let dia = sumarDia(B.dates.at(-1)), añadidos = desdeIdx != null ? 1 : 0;
   while (dia <= hasta) {
     const fila = nuevos?.[dia];
     const faltan = OBLIGATORIOS.filter(f => f in B.cols && (fila?.[f] == null || !Number.isFinite(fila[f])));
@@ -114,7 +130,7 @@ function actualizarActivo(activo, nuevos, hasta) {
     añadidos++; dia = sumarDia(dia);
   }
   if (añadidos) guardar(ARCHIVO[activo], B, activo);
-  else console.log(`${activo}: sin días nuevos (último ${B.dates.at(-1)})`);
+  else console.log(`${activo}: sin cambios (último ${B.dates.at(-1)})`);
   return { B, añadidos };
 }
 
