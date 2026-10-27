@@ -1,4 +1,4 @@
-Prueba de métricas ChartInspect · 2026-10-27T21:32:46.285Z
+Prueba de métricas ChartInspect · 2026-10-27T21:34:06.333Z
 Comparación con Bambú del 2025-09-01 al 2026-09-08; frescura pedida hasta 2026-10-27.
 
 == BTC · objetivo: exBal, exFlow
@@ -27,4 +27,10 @@ lth-supply: HTTP 404 · {"success":false,"error":"Metric \"lth-supply\" not foun
 
 == Endpoint de saldos de exchanges (exige permiso de exchanges)
 /exchange-etf/list: HTTP 200 · {"success":true,"availableDatasets":["exchange-balances","etf-balances"],"count":2}
-/exchange-etf/exchange-balances?days=400&limit=400: HTTP 200 · 399 filas · último día undefined · campos: timeunix, usdprice, blockheight, allexchanges, coinbase, binance, bitfinex, robinhood, upbit, kraken, okx, gemini, bybit, bitflyer, bitstamp, bithumb, coincheck, crypto_com, deribit, boerse_stuttgart
+/exchange-etf/exchange-balances?days=400&limit=400: HTTP 200 · 399 filas · último día 2026-10-26 · campos: timeunix, usdprice, blockheight, allexchanges, coinbase, binance, bitfinex, robinhood, upbit, kraken, okx, gemini, bybit, bitflyer, bitstamp, bithumb, coincheck, crypto_com, deribit, boerse_stuttgart
+  exBal frente a: allexchanges 0.00% | coinbase 69.74% | binance 80.91% | bitfinex 90.57% | robinhood 94.83% | upbit 94.85% | kraken 95.38% | okx 96.64% | gemini 98.52% | bybit 98.23% | bitflyer 98.39% | bitstamp 98.41% | bithumb 98.91% | coincheck 98.78% | crypto_com 98.75% | deribit 98.87% | boerse_stuttgart 98.95% | bitget 98.99% | mt__gox 99.00% | bitcoin_de 99.06% | revolut 99.14% | bitgo 99.30% | river 99.28% | bitbank 99.42% | gate_io 99.40% | bitvavo 99.46% | bitmex 99.57% | sbi_vc_trade 99.63% | hashkey_exchange 99.65% | htx 99.72% | mexc 99.78% | kucoin 99.72% | binance_us 99.76% | bit_com 99.69%
+  exFlow = cambio de 1 día(s) de allexchanges → error típico 0.01% (350 días)
+  exFlow30 = cambio de 30 día(s) de allexchanges → error típico 0.00% (321 días)
+  últimos días: 2026-10-22 3417770 · 2026-10-23 3450132 · 2026-10-24 3457115 · 2026-10-25 3457186 · 2026-10-26 3458088
+  Bambú antes de pararse: 2026-09-05 3445897 · 2026-09-06 3438292 · 2026-09-07 3438167 · 2026-09-08 3437934 · 2026-09-09 3437835
+  API esos días: 2026-09-05 3445897 · 2026-09-06 3438292 · 2026-09-07 3438167 · 2026-09-08 3437934 · 2026-09-09 3437835
