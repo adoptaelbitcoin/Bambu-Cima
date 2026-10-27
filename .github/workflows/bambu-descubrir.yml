@@ -1,4 +1,4 @@
-name: Bambu · verificar mapeo ChartInspect
+name: Bambu · prueba de relleno (rama de pruebas)
 on:
   push:
     branches: [bambu-descubrir]
@@ -7,22 +7,31 @@ on:
 permissions:
   contents: write
 jobs:
-  verificar:
+  probar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Probar métricas de exchanges y otras paradas desde septiembre
+      - name: Traer de ChartInspect desde el 5-sep-2026
         env:
           CHARTINSPECT_API_KEY: ${{ secrets.CHARTINSPECT_API_KEY }}
-        run: node automatizacion/probar-exchanges.mjs automatizacion/prueba-exchanges.txt
-      - name: Guardar el informe en esta rama
-        if: always()
+        run: node automatizacion/traer-chartinspect.mjs "$RUNNER_TEMP/datos.json" 2026-09-05
+      - name: Rellenar desde el 7-sep-2026 y añadir días nuevos
+        run: node automatizacion/bambu-datos.mjs "$RUNNER_TEMP/datos.json" --rellenar 2026-09-07 | tee automatizacion/prueba-relleno.txt
+      - name: Comprobar que los archivos cargan
+        run: |
+          node -e '
+            const vm = require("vm"), fs = require("fs");
+            for (const f of ["app/btc_real.js", "app/eth_real.js", "app/history.js", "bambu2/data.js"]) {
+              vm.runInNewContext(fs.readFileSync(f, "utf8"), { window: {} });
+              console.log("ok", f);
+            }'
+      - name: Guardar el resultado en esta rama
         run: |
           git config user.name "bambu-bot"
           git config user.email "bambu-bot@users.noreply.github.com"
-          git add automatizacion/prueba-exchanges.txt || true
-          git commit -m "informe de prueba de exchanges ChartInspect" || echo "sin cambios"
+          git add app/btc_real.js app/eth_real.js app/history.js bambu2/data.js automatizacion/prueba-relleno.txt
+          git commit -m "prueba: relleno de datos parados desde el 9-sep" || echo "sin cambios"
           git push

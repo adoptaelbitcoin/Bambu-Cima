@@ -31,6 +31,8 @@ const MAPA = {
     ["mvrvZ", "mvrv-z-score", "z_score", null, 4],
     ["puell", "puell-multiple", "puell_multiple", null, 4],
     ["spProf", "sth-in-profit", "pct_sth_in_profit", null, 2],
+    ["supplyP", "supply-in-profit", "percent_btc_in_profit", null, 4],
+    ["sthLoss", "sth-in-profit", "pct_sth_in_loss", null, 4],
   ],
   ETH: [
     ["rpSTH", "sth-cost-basis", "sth_cost_basis", null, 2],
@@ -42,6 +44,8 @@ const MAPA = {
     ["nuplLTH", "lth-nupl", "lth_nupl", null, 4],
     ["mvrvZ", "mvrv-z-score", "z_score", null, 4],
     ["spProf", "sth-in-profit", "pct_sth_in_profit", null, 2],
+    ["lthSupply", "lth-sopr", "lth_supply_btc", null, 0],
+    ["lthSupplyPct", "lth-sopr", "lth_percentage", null, 2],
   ],
 };
 const CADENA = { BTC: "bitcoin", ETH: "ethereum" };
@@ -76,6 +80,17 @@ function mediaSimple(s, dia, n) {
   return suma / n;
 }
 
+// Saldo total de BTC en exchanges { fecha: btc } (ruta exchange-etf, no onchain; fecha en timeunix)
+async function saldosExchanges(desde) {
+  const dias = Math.ceil((Date.now() - Date.parse(desde + "T00:00:00Z")) / DIA) + 2;
+  const j = await pedir(`https://chartinspect.com/api/v1/exchange-etf/exchange-balances?days=${dias}&limit=${dias}`, { "x-api-key": KEY });
+  const filas = Array.isArray(j) ? j : j.data;
+  if (!Array.isArray(filas)) throw new Error("Respuesta inesperada de exchange-balances");
+  const out = {};
+  for (const f of filas) { const v = Number(f.allexchanges); if (f.timeunix && Number.isFinite(v)) out[iso(Number(f.timeunix) * 1000)] = v; }
+  return out;
+}
+
 async function cierresBinance(simbolo, desde, hasta) {
   const url = `https://data-api.binance.vision/api/v3/klines?symbol=${simbolo}&interval=1d&startTime=${Date.parse(desde + "T00:00:00Z")}&endTime=${Date.parse(hasta + "T23:59:59Z")}&limit=1000`;
   const out = {};
@@ -101,6 +116,21 @@ export async function traer(activo, desde, hasta) {
   } else {
     const s = await serie(cadena, "cdd", "cdd", masDias(desde, -370), hasta);
     for (const d in filas) { const a = mediaSimple(s, d, 90), b = mediaSimple(s, d, 365); filas[d].cdd = a && b ? redondear(a / b, 4) : null; }
+  }
+  if (activo === "BTC") {
+    // Exchanges: saldo total, y sus cambios de 1 día (exFlow y netflow, este con 2 decimales) y de 30 días
+    const s = await saldosExchanges(masDias(desde, -31));
+    const dif = (d, n) => s[d] != null && s[masDias(d, -n)] != null ? s[d] - s[masDias(d, -n)] : null;
+    for (const d in filas) {
+      filas[d].exBal = redondear(s[d], 0);
+      filas[d].exFlow = redondear(dif(d, 1), 0);
+      filas[d].netflow = redondear(dif(d, 1), 2);
+      filas[d].exFlow30 = redondear(dif(d, 30), 0);
+    }
+  } else {
+    // Cambio en % de 30 días del supply de los LTH
+    const s = await serie(cadena, "lth-sopr", "lth_supply_btc", masDias(desde, -31), hasta);
+    for (const d in filas) { const a = s[d], b = s[masDias(d, -30)]; filas[d].lthNet30 = a && b ? redondear((a / b - 1) * 100, 3) : null; }
   }
   return filas;
 }
