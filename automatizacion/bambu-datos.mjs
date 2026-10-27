@@ -15,7 +15,10 @@ const RAIZ = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "
 const ARCHIVO = { BTC: "app/btc_real.js", ETH: "app/eth_real.js" };
 
 // Campos que vienen de ChartInspect. Un día solo se añade si trae todos los OBLIGATORIOS.
-const CAMPOS_ORIGEN = ["price", "rpSTH", "rpLTH", "sthSopr", "asopr", "lthSopr", "nuplSTH", "nuplLTH", "mvrvZ", "cdd", "puell", "spProf"];
+const CAMPOS_ORIGEN = ["price", "rpSTH", "rpLTH", "sthSopr", "asopr", "lthSopr", "nuplSTH", "nuplLTH", "mvrvZ", "cdd", "puell", "spProf",
+  "supplyP", "sthLoss", "exBal", "exFlow", "netflow", "exFlow30", "lthSupply", "lthSupplyPct", "lthNet30"];
+// Campos que estuvieron parados desde el 9-sep-2026; "--rellenar AAAA-MM-DD" los rehace desde esa fecha
+const RELLENO = ["supplyP", "sthLoss", "exBal", "exFlow", "netflow", "exFlow30", "lthSupply", "lthSupplyPct", "lthNet30"];
 const OBLIGATORIOS = ["price", "rpSTH", "rpLTH", "sthSopr", "nuplSTH", "nuplLTH"];
 
 // Medias de series on-chain: [campo, base, periodo, tipo]
@@ -98,8 +101,20 @@ function derivar(B, i = B.dates.length - 1) {
 // ---------- añadir los días nuevos de un activo ----------
 const DIAS_REVISION = 3; // ChartInspect corrige a veces los últimos días (sobre todo ETH)
 
-function actualizarActivo(activo, nuevos, hasta) {
+function actualizarActivo(activo, nuevos, hasta, rellenarDesde) {
   const B = cargar(ARCHIVO[activo]);
+  // 0) Rellenar los campos de RELLENO desde una fecha (solo esos campos; el resto del histórico no se toca)
+  let rellenados = 0;
+  if (rellenarDesde) for (let i = 0; i < B.dates.length; i++) {
+    const fila = nuevos?.[B.dates[i]];
+    if (B.dates[i] < rellenarDesde || !fila) continue;
+    for (const f of RELLENO) {
+      const v = fila[f];
+      if (!(f in B.cols) || v == null || !Number.isFinite(v) || v === B.cols[f][i]) continue;
+      B.cols[f][i] = v; rellenados++;
+    }
+  }
+  if (rellenarDesde) console.log(`${activo}: ${rellenados} valores rellenados desde ${rellenarDesde}`);
   // 1) Corregir los últimos días ya publicados si ChartInspect ha revisado sus valores
   let desdeIdx = null;
   for (let i = Math.max(0, B.dates.length - DIAS_REVISION); i < B.dates.length; i++) {
@@ -114,7 +129,7 @@ function actualizarActivo(activo, nuevos, hasta) {
   }
   if (desdeIdx != null) for (let i = desdeIdx; i < B.dates.length; i++) derivar(B, i);
   // 2) Añadir los días nuevos
-  let dia = sumarDia(B.dates.at(-1)), añadidos = desdeIdx != null ? 1 : 0;
+  let dia = sumarDia(B.dates.at(-1)), añadidos = desdeIdx != null || rellenados ? 1 : 0;
   while (dia <= hasta) {
     const fila = nuevos?.[dia];
     const faltan = OBLIGATORIOS.filter(f => f in B.cols && (fila?.[f] == null || !Number.isFinite(fila[f])));
@@ -124,7 +139,10 @@ function actualizarActivo(activo, nuevos, hasta) {
       const ant = B.cols[f].at(-1);
       if (DERIVADOS.has(f)) B.cols[f].push(null);
       else if (CAMPOS_ORIGEN.includes(f) && fila[f] != null && Number.isFinite(fila[f])) B.cols[f].push(fila[f]);
-      else B.cols[f].push(ant); // sin dato nuevo: se mantiene el último valor, como hasta ahora
+      else {
+        B.cols[f].push(ant); // sin dato nuevo: se mantiene el último valor, como hasta ahora
+        if (CAMPOS_ORIGEN.includes(f) && ant != null) console.log(`AVISO ${activo} ${dia}: sin dato de ${f}; se repite el último valor`);
+      }
     }
     derivar(B);
     añadidos++; dia = sumarDia(dia);
@@ -148,10 +166,11 @@ function generarBambu2(bases) {
 }
 
 // ---------- principal ----------
-const entrada = process.argv[2];
+const [entrada, opcion, rellenarDesde] = process.argv.slice(2);
 const nuevos = entrada ? JSON.parse(readFileSync(entrada, "utf8")) : {};
 const ayer = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-const res = { BTC: actualizarActivo("BTC", nuevos.BTC, ayer), ETH: actualizarActivo("ETH", nuevos.ETH, ayer) };
+const relleno = opcion === "--rellenar" ? rellenarDesde : null;
+const res = { BTC: actualizarActivo("BTC", nuevos.BTC, ayer, relleno), ETH: actualizarActivo("ETH", nuevos.ETH, ayer, relleno) };
 if (res.BTC.añadidos || res.ETH.añadidos) {
   const fecha = [res.BTC.B.dates.at(-1), res.ETH.B.dates.at(-1)].sort()[0];
   const h = `${RAIZ}/app/history.js`;
