@@ -1,0 +1,5 @@
+BTC: 288 valores rellenados desde 2026-09-07
+BTC: app/btc_real.js ahora llega a 2026-10-26 (5946 días)
+ETH: 150 valores rellenados desde 2026-09-07
+ETH: app/eth_real.js ahora llega a 2026-10-26 (4099 días)
+Fecha de datos: 2026-10-26. bambu2/data.js regenerado.
