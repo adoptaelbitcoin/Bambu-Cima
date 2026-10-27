@@ -24,10 +24,14 @@ jobs:
         run: |
           node -e '
             const vm = require("vm"), fs = require("fs");
-            for (const f of ["app/btc_real.js", "app/eth_real.js", "app/history.js", "bambu2/data.js"]) {
-              vm.runInNewContext(fs.readFileSync(f, "utf8"), { window: {} });
-              console.log("ok", f);
-            }'
+            for (const f of ["app/btc_real.js", "app/eth_real.js"]) {
+              const c = { window: {} }; vm.runInNewContext(fs.readFileSync(f, "utf8"), c);
+              const D = Object.values(c.window.BambuRealData)[0];
+              for (const k of D.fields) if (D.cols[k].length !== D.dates.length) throw new Error(f + ": " + k + " no cuadra");
+              console.log(f, D.count, "días hasta", D.latestIso);
+            }
+            const c = { window: {} }; vm.runInNewContext(fs.readFileSync("bambu2/data.js", "utf8"), c);
+            console.log("bambu2/data.js hasta", c.window.BAMBU2_DATA.BTC.d.at(-1));'
       - name: Guardar el resultado en esta rama
         run: |
           git config user.name "bambu-bot"
