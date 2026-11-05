@@ -1,13 +1,13 @@
 # Actualiza los datos de Bambú Cima (y bambu2/data.js) con la API de ChartInspect.
-# Corre una vez al día a las 10:30 hora de España. GitHub solo entiende UTC, así que
-# hay dos horas programadas (8:30 UTC en verano, 9:30 UTC en invierno) y cada día
+# Corre una vez al día a las 11:00 hora de España. GitHub solo entiende UTC, así que
+# hay dos horas programadas (9:00 UTC en verano, 10:00 UTC en invierno) y cada día
 # solo sigue la que corresponde al horario vigente en Madrid.
 name: Bambu · actualizar datos
 
 on:
   schedule:
-    - cron: "30 8 * * *"   # 10:30 en Madrid con horario de verano (UTC+2)
-    - cron: "30 9 * * *"   # 10:30 en Madrid con horario de invierno (UTC+1)
+    - cron: "0 9 * * *"    # 11:00 en Madrid con horario de verano (UTC+2)
+    - cron: "0 10 * * *"   # 11:00 en Madrid con horario de invierno (UTC+1)
   workflow_dispatch: {}
   push:
     branches: [main]
@@ -24,14 +24,14 @@ jobs:
   actualizar:
     runs-on: ubuntu-latest
     steps:
-      - name: ¿Toca la ejecución de las 10:30 en Madrid?
+      - name: ¿Toca la ejecución de las 11:00 en Madrid?
         id: hora
         run: |
           seguir=true
           if [ "${{ github.event_name }}" = "schedule" ]; then
             off=$(TZ=Europe/Madrid date +%z)
             case "${{ github.event.schedule }}|$off" in
-              "30 8 * * *|+0200"|"30 9 * * *|+0100") ;;
+              "0 9 * * *|+0200"|"0 10 * * *|+0100") ;;
               *) seguir=false; echo "Hoy toca la otra hora (Madrid $off)";;
             esac
           fi
