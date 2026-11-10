@@ -171,10 +171,14 @@ const nuevos = entrada ? JSON.parse(readFileSync(entrada, "utf8")) : {};
 const ayer = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 const relleno = opcion === "--rellenar" ? rellenarDesde : null;
 const res = { BTC: actualizarActivo("BTC", nuevos.BTC, ayer, relleno), ETH: actualizarActivo("ETH", nuevos.ETH, ayer, relleno) };
-if (res.BTC.añadidos || res.ETH.añadidos) {
-  const fecha = [res.BTC.B.dates.at(-1), res.ETH.B.dates.at(-1)].sort()[0];
-  const h = `${RAIZ}/app/history.js`;
-  writeFileSync(h, readFileSync(h, "utf8").replace(/BambuDataDate = "\d{4}-\d{2}-\d{2}"/, `BambuDataDate = "${fecha}"`));
-  generarBambu2({ BTC: res.BTC.B, ETH: res.ETH.B });
-  console.log(`Fecha de datos: ${fecha}. bambu2/data.js regenerado.`);
+// La fecha del reporte es la de BTC (desde el 10-nov-2026): si ChartInspect se retrasa con ETH,
+// ETH muestra su propio último día y no arrastra la fecha del reporte.
+const fecha = res.BTC.B.dates.at(-1);
+const h = `${RAIZ}/app/history.js`, hist = readFileSync(h, "utf8");
+const fechaAntes = (hist.match(/BambuDataDate = "(\d{4}-\d{2}-\d{2})"/) || [])[1];
+if (fecha !== fechaAntes) writeFileSync(h, hist.replace(/BambuDataDate = "\d{4}-\d{2}-\d{2}"/, `BambuDataDate = "${fecha}"`));
+if (res.BTC.añadidos || res.ETH.añadidos) generarBambu2({ BTC: res.BTC.B, ETH: res.ETH.B });
+if (res.BTC.añadidos || res.ETH.añadidos || fecha !== fechaAntes) {
+  const eth = res.ETH.B.dates.at(-1);
+  console.log(`Fecha de datos: ${fecha}${eth !== fecha ? ` (ETH llega a ${eth})` : ""}. bambu2/data.js ${res.BTC.añadidos || res.ETH.añadidos ? "regenerado" : "sin cambios"}.`);
 }
